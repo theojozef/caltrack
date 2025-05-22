@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "474981035295",
+    "project_id": "cal-track-55d37",
+    "storage_bucket": "cal-track-55d37.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:474981035295:android:d7d5a6651bcf9de703142a",
+        "android_client_info": {
+          "package_name": "com.example.cal_track_v1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB15SBhbqw1HHMq7h70uRRenzMSvRI761U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

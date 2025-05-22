@@ -1,0 +1,33 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "cal-track-55d37",
+          "appId": "1:474981035295:android:d7d5a6651bcf9de703142a",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "cal-track-55d37",
+          "configurations": {
+            "android": "1:474981035295:android:d7d5a6651bcf9de703142a",
+            "ios": "1:474981035295:ios:bd0a4219cf037d1703142a",
+            "macos": "1:474981035295:ios:bd0a4219cf037d1703142a",
+            "web": "1:474981035295:web:8b5139387415cb5303142a",
+            "windows": "1:474981035295:web:20c1637433e6342003142a"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  }
+}
