@@ -1,6 +1,6 @@
 {
-    "name": "cal_track_v1",
-    "short_name": "cal_track_v1",
+    "name": "Cal' Track",
+    "short_name": "CalTrack",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

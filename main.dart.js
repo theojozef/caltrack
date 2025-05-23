@@ -44218,7 +44218,7 @@ $1(a){return new A.qW(null)},
 $S:487}
 A.OU.prototype={
 O(a){var s=null
-return new A.C_(B.nt,"Mon App",A.x5(s,s,B.PX,s),s)}}
+return new A.C_(B.nt,"Cal' Track",A.x5(s,s,B.PX,s),s)}}
 A.xi.prototype={
 fS(){var s=this
 return A.al(["sexe",s.a,"poids",s.b,"taille",s.c,"age",s.d,"nActivite",s.e,"typeSport",s.f,"objectif",s.r],t.N,t.z)}}
