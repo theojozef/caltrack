@@ -3,7 +3,7 @@
     <uses-permission android:name="android.permission.CAMERA"/>
 
     <application
-        android:label="cal_track_v1"
+        android:label="Cal\' Track"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

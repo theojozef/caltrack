@@ -3,9 +3,9 @@ const MANIFEST = 'flutter-app-manifest';
 const TEMP = 'flutter-temp-cache';
 const CACHE_NAME = 'flutter-app-cache';
 
-const RESOURCES = {"assets/AssetManifest.bin": "09bbf51445a5a73be4814075c2416ea8",
-"assets/AssetManifest.bin.json": "681ff0c38be7065efa2ed490c5abd886",
-"assets/AssetManifest.json": "fb35f243f36a7af12bc17cbbfe3645fe",
+const RESOURCES = {"assets/AssetManifest.bin": "e496b0ecf90c25e9b858c50032931819",
+"assets/AssetManifest.bin.json": "1dbd3e954aacc2a4dedb5070b0837152",
+"assets/AssetManifest.json": "3d2e4fb61d8a64471e0fa82cf467f087",
 "assets/assets/data/caclul_calories.xlsx": "940d6be11dd26fcbb42e8d38d603c392",
 "assets/assets/data/ciqual.csv": "99d177ff95e81e461d182ee98f601286",
 "assets/assets/data/ciqual2.csv": "7c66a3bc1dc9dedb600b8f0f54154bd4",
@@ -13,7 +13,10 @@ const RESOURCES = {"assets/AssetManifest.bin": "09bbf51445a5a73be4814075c2416ea8
 "assets/assets/images/icon_scan_2.svg": "5ac6079b9806742a22886f8a04a9fa18",
 "assets/FontManifest.json": "dc3d03800ccca4601324923c0b1d6d57",
 "assets/fonts/MaterialIcons-Regular.otf": "eebbffccb09965c86e57c2f292cffa7f",
-"assets/NOTICES": "b5cc7be5dcdcdd86f924f7b54b3e1ead",
+"assets/icons/icon-caltrack-192.png": "011576209e62ede96923d0c95941f753",
+"assets/icons/icon-caltrack-32.png": "bd5def2552a9229938514d71195c4bc9",
+"assets/icons/icon-caltrack-512.png": "b5cd944bec139e7195fabda466a5ccc0",
+"assets/NOTICES": "7bac6b3abf1a3f9b520f14d4c6139ce5",
 "assets/packages/cupertino_icons/assets/CupertinoIcons.ttf": "33b7d9392238c04c131b6ce224e13711",
 "assets/shaders/ink_sparkle.frag": "ecc85a2e95f5e9f53123dcaf8cb9b6ce",
 "canvaskit/canvaskit.js": "86e461cf471c1640fd2b461ece4589df",
@@ -29,16 +32,16 @@ const RESOURCES = {"assets/AssetManifest.bin": "09bbf51445a5a73be4814075c2416ea8
 "canvaskit/skwasm_st.js.symbols": "c7e7aac7cd8b612defd62b43e3050bdd",
 "canvaskit/skwasm_st.wasm": "56c3973560dfcbf28ce47cebe40f3206",
 "flutter.js": "76f08d47ff9f5715220992f993002504",
-"flutter_bootstrap.js": "6e07122e3b436f65b879e98a3c72741a",
+"flutter_bootstrap.js": "324ecb9cc883bfa8ec6c65606ef13b5c",
 "icon-caltrack-32.png": "bd5def2552a9229938514d71195c4bc9",
 "icons/icon-app-caltrack.png": "87ebd1a8d0ce32b6fc6eca02b3733c4b",
 "icons/icon-caltrack-192.png": "011576209e62ede96923d0c95941f753",
 "icons/icon-caltrack-32.png": "bd5def2552a9229938514d71195c4bc9",
 "icons/icon-caltrack-512.png": "b5cd944bec139e7195fabda466a5ccc0",
-"index.html": "af104036f8e47aa178fd70929153e75b",
-"/": "af104036f8e47aa178fd70929153e75b",
-"main.dart.js": "4411c1c97972c192eac735892687c37b",
-"manifest.json": "5e14907f9d88799d3b1ad5058bea53df",
+"index.html": "8f5997749e5563bc27a86af1e408d1fc",
+"/": "8f5997749e5563bc27a86af1e408d1fc",
+"main.dart.js": "7713a630fa980b1832c18adb45527655",
+"manifest.json": "cc4fee4ed15d15ea2d24dc6a717872ed",
 "version.json": "363b64fcf8b4cc98ba6b271c311d4d51"};
 // The application shell files that are downloaded before a service worker can
 // start.
