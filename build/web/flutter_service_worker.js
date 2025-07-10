@@ -3,9 +3,9 @@ const MANIFEST = 'flutter-app-manifest';
 const TEMP = 'flutter-temp-cache';
 const CACHE_NAME = 'flutter-app-cache';
 
-const RESOURCES = {"assets/AssetManifest.bin": "e496b0ecf90c25e9b858c50032931819",
-"assets/AssetManifest.bin.json": "1dbd3e954aacc2a4dedb5070b0837152",
-"assets/AssetManifest.json": "3d2e4fb61d8a64471e0fa82cf467f087",
+const RESOURCES = {"assets/AssetManifest.bin": "91ff2df13ec48c113f6588c0361bee6e",
+"assets/AssetManifest.bin.json": "59d5848399e1d095807be1dd7c6905c2",
+"assets/AssetManifest.json": "c7b24869242ef91435f9bee64632550f",
 "assets/assets/data/caclul_calories.xlsx": "940d6be11dd26fcbb42e8d38d603c392",
 "assets/assets/data/ciqual.csv": "99d177ff95e81e461d182ee98f601286",
 "assets/assets/data/ciqual2.csv": "7c66a3bc1dc9dedb600b8f0f54154bd4",
@@ -13,6 +13,7 @@ const RESOURCES = {"assets/AssetManifest.bin": "e496b0ecf90c25e9b858c50032931819
 "assets/assets/images/icon_scan_2.svg": "5ac6079b9806742a22886f8a04a9fa18",
 "assets/FontManifest.json": "dc3d03800ccca4601324923c0b1d6d57",
 "assets/fonts/MaterialIcons-Regular.otf": "eebbffccb09965c86e57c2f292cffa7f",
+"assets/icons/Icon-192.png": "011576209e62ede96923d0c95941f753",
 "assets/icons/icon-caltrack-192.png": "011576209e62ede96923d0c95941f753",
 "assets/icons/icon-caltrack-32.png": "bd5def2552a9229938514d71195c4bc9",
 "assets/icons/icon-caltrack-512.png": "b5cd944bec139e7195fabda466a5ccc0",
@@ -32,14 +33,14 @@ const RESOURCES = {"assets/AssetManifest.bin": "e496b0ecf90c25e9b858c50032931819
 "canvaskit/skwasm_st.js.symbols": "c7e7aac7cd8b612defd62b43e3050bdd",
 "canvaskit/skwasm_st.wasm": "56c3973560dfcbf28ce47cebe40f3206",
 "flutter.js": "76f08d47ff9f5715220992f993002504",
-"flutter_bootstrap.js": "ff4d6a3b2f7bd5ef0d51e352e0fbdeb7",
+"flutter_bootstrap.js": "e7c6c7af64e0100fa15d4e55bd05a93e",
 "icon-caltrack-32.png": "bd5def2552a9229938514d71195c4bc9",
 "icons/icon-app-caltrack.png": "87ebd1a8d0ce32b6fc6eca02b3733c4b",
 "icons/icon-caltrack-192.png": "011576209e62ede96923d0c95941f753",
 "icons/icon-caltrack-32.png": "bd5def2552a9229938514d71195c4bc9",
 "icons/icon-caltrack-512.png": "b5cd944bec139e7195fabda466a5ccc0",
-"index.html": "b829574c93aae27b6be77d253e470db3",
-"/": "b829574c93aae27b6be77d253e470db3",
+"index.html": "20b72555c382ad730002d79e26eee00c",
+"/": "20b72555c382ad730002d79e26eee00c",
 "main.dart.js": "7713a630fa980b1832c18adb45527655",
 "manifest.json": "334128aeaacf8c6aecd290251210403d",
 "version.json": "363b64fcf8b4cc98ba6b271c311d4d51"};
