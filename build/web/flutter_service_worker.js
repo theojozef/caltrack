@@ -33,7 +33,7 @@ const RESOURCES = {"assets/AssetManifest.bin": "91ff2df13ec48c113f6588c0361bee6e
 "canvaskit/skwasm_st.js.symbols": "c7e7aac7cd8b612defd62b43e3050bdd",
 "canvaskit/skwasm_st.wasm": "56c3973560dfcbf28ce47cebe40f3206",
 "flutter.js": "76f08d47ff9f5715220992f993002504",
-"flutter_bootstrap.js": "e7c6c7af64e0100fa15d4e55bd05a93e",
+"flutter_bootstrap.js": "b6e8286b384c7cb0be87298cc307c0c1",
 "icon-caltrack-32.png": "bd5def2552a9229938514d71195c4bc9",
 "icons/icon-app-caltrack.png": "87ebd1a8d0ce32b6fc6eca02b3733c4b",
 "icons/icon-caltrack-192.png": "011576209e62ede96923d0c95941f753",
@@ -41,7 +41,7 @@ const RESOURCES = {"assets/AssetManifest.bin": "91ff2df13ec48c113f6588c0361bee6e
 "icons/icon-caltrack-512.png": "b5cd944bec139e7195fabda466a5ccc0",
 "index.html": "20b72555c382ad730002d79e26eee00c",
 "/": "20b72555c382ad730002d79e26eee00c",
-"main.dart.js": "7713a630fa980b1832c18adb45527655",
+"main.dart.js": "ba2c6a3cc581d7929cc30035436e6760",
 "manifest.json": "334128aeaacf8c6aecd290251210403d",
 "version.json": "363b64fcf8b4cc98ba6b271c311d4d51"};
 // The application shell files that are downloaded before a service worker can

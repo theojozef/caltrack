@@ -384,6 +384,7 @@ child: PopScope(
                 },
                 
                 items: const [
+                  DropdownMenuItem(value: 'pas', child: Text('Pas ou peu de sport')),
                   DropdownMenuItem(value: 'loisir', child: Text('Sport de loisir')),
                   DropdownMenuItem(value: 'endurance', child: Text('Sport d\'endurance')),
                   DropdownMenuItem(value: 'force', child: Text('Sport de force')),

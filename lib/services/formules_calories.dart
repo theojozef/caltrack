@@ -76,7 +76,7 @@ class CalculateurNutrition {
   final caloriesMin = calories['calories_min']!;
   final caloriesMax = calories['calories_max']!;
 
-  final protMin1 = user.poids * coefSport;
+  final protMin1 = _calculPdc() * coefSport; //user.poids
   final protMin2 = (caloriesMin * 0.15) / 4;
   final protMin = (protMin1 > protMin2 ? protMin1 : protMin2).round();
 
@@ -123,6 +123,8 @@ double getCoefActivite(String nActivite) {
 
 double getCoefSport(String typeSport) {
   switch (typeSport.toLowerCase()) {
+    case 'pas':
+      return 1.0;
     case 'loisir':
       return 1.0;
     case 'endurance':
