@@ -1,35 +1,40 @@
 {
-    "name": "cal_track_v1",
-    "short_name": "cal_track_v1",
-    "start_url": ".",
+    "name": "Cal' Track",
+    "short_name": "CalTrack",
+    "start_url": "/caltrack/",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
+    "background_color": "#393939",
+    "theme_color": "#357E50",
     "description": "A new Flutter project.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
+
         {
-            "src": "icons/Icon-192.png",
-            "sizes": "192x192",
+            "src": "icons/icon-caltrack-32.png",
+            "sizes": "32x32",
             "type": "image/png"
         },
+
         {
-            "src": "icons/Icon-512.png",
+            "src": "icons/icon-caltrack-512.png",
             "sizes": "512x512",
             "type": "image/png"
         },
+
         {
-            "src": "icons/Icon-maskable-192.png",
+            "src": "icons/icon-caltrack-192.png",
             "sizes": "192x192",
             "type": "image/png",
             "purpose": "maskable"
         },
+
         {
-            "src": "icons/Icon-maskable-512.png",
+            "src": "icons/icon-caltrack-512.png",
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "maskable"
         }
+
     ]
 }
