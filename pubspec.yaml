@@ -47,6 +47,7 @@ dependencies:
   mobile_scanner: ^3.0.0
   permission_handler: ^11.0.0
   flutter_svg: ^2.1.0
+  flutter_secure_storage: ^9.0.0
   
 
 
@@ -109,10 +110,13 @@ flutter:
   - assets/data/ciqual.csv
   - assets/data/ciqual2.csv
   - assets/images/icon_scan_2.svg
+  - assets/images/icon_scan_3.svg  
+  - assets/images/icon_scan_5.svg
+  - assets/images/
   - assets/data/ciqual4.csv
   - icons/  
   
 flutter_icons:
   android: true
   ios: true
-  image_path: "icons/icon-caltrack-32.png"
+  image_path: "icons/icon-caltrack-512.png"

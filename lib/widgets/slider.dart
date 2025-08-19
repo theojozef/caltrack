@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 class SliderButton extends StatelessWidget {
   final double position;
+  
   //final Function(double delta) onMove;
 
   const SliderButton({
@@ -10,17 +11,20 @@ class SliderButton extends StatelessWidget {
     // required this.onMove,
   });
 
+  static double sliderWidth = 7;
+  static double sliderHeight = 27;
+
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      left: position - 3.5,
-      top: (35 - 27) / 2,
-      height: 27,
+      left: position - (sliderWidth/2), //position - 3.5
+      top: (35 - sliderHeight) / 2, //(35 - 27) / 2
+      height: sliderHeight, //27
       // child: GestureDetector(
         // onHorizontalDragUpdate: (details) => onMove(details.delta.dx),
         child: Container(
-          width: 7,
-          height: 27,
+          width: sliderWidth, //7
+          height: sliderHeight, //27
           decoration: BoxDecoration(
             shape: BoxShape.rectangle,
             color:  Color(0x32D9D9D9),

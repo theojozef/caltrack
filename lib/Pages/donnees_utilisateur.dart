@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:cal_track_v1/Pages/tableaudebord.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -185,15 +187,20 @@ Future<void> _loadUserData() async {
 
   static const double gap = 20;
   final double fieldWidth = 310;
+  static const double paddingH = 20;
+  static const double pctScreen = 0.10;
+  double saveHeight = 50;
+
 
   @override
   Widget build(BuildContext context) {
 
-    if (_isLoading) {
+  if (_isLoading) {
   return const Scaffold(
-    body: Center(child: CircularProgressIndicator(color: Color(0xFF357E50))),
-  );
-}
+    body: Center(child: CircularProgressIndicator(color: Color(0xFF357E50))
+    ),
+    );
+  }
 
 return Theme(
     data: Theme.of(context).copyWith(
@@ -234,25 +241,52 @@ child: PopScope(
   },
 
     child: Scaffold(
-      backgroundColor: const Color(0xFF393939),
-      appBar: AppBar(title: const Text("Données utilisateur")),
+      backgroundColor: const Color(0xFF393939),     
       
       body: SafeArea(
-      //child: Padding( //Padding
+
+     
+        
+      child: Stack( //Stack
+            children: [
+
+              /* Row(
+                mainAxisAlignment: MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  IconButton(
+              icon: const Icon(Icons.chevron_left, 
+              color: Colors.white,
+              size: 30),
+              onPressed: () {
+                Navigator.pop(context);
+              },
+            ),    
+
+               Text("Mon profil"),
+              ],
+              ), */
+
+              // Contenu scrollable
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: paddingH),// pour ne pas cacher le contenu
         
         child: Form(
           key: _formKey,
           
           child: ListView(
             physics: BouncingScrollPhysics(),
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(16), //16
             children: [
+              
+              SizedBox(height: MediaQuery.of(context).size.height * pctScreen),
+              
               if (_errorMessage != null)
                 Text(
                   _errorMessage!,
                   style: const TextStyle(color: Colors.red),
                 ),
-              
+
               // champs poids
               Center(
                 child: SizedBox(
@@ -416,27 +450,94 @@ child: PopScope(
                 },
                 
                 items: const [
-                  DropdownMenuItem(value: 'déficit', child: Text('Perte de gras')),
-                  DropdownMenuItem(value: 'maintien', child: Text('Maintien')),
-                  DropdownMenuItem(value: 'pdm', child: Text('Prise de masse musculaire')),
+                  DropdownMenuItem(value: 'déficit', child: Text('Perdre du poids')),
+                  DropdownMenuItem(value: 'maintien', child: Text('Maintenir mon poids')),
+                  DropdownMenuItem(value: 'pdm', child: Text('Prendre du poids')),
                 ],
               ),
               ),
               ),
               
+              // SizedBox(height: saveHeight + (4*paddingH)),
               const SizedBox(height: gap * 2),
 
+              
+              
 
-              Center(                 
+            ],
+          ),
+        ),
+      
+    ),
+
+    Positioned(
+            top: 0, // Espace par rapport au haut de l'écran
+            left: 0,
+            right: 0,
+            child: ClipRect( // obligatoire pour BackdropFilter
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                
+                child: Container(
+                  height: MediaQuery.of(context).size.height * pctScreen,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  alignment: Alignment.bottomCenter,
+                  color: Color(0xFF676464).withAlpha(150), // Couleur semi-transparente
+                  child: Row(
+                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left, 
+                      color: Colors.white, size: 30),
+                      
+                      onPressed: () {
+                        Navigator.pop(context);
+                        },
+                    ),
+
+                    const Text(
+                    "Mon profil",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white,
+                    ),
+                    ),
+
+                    // Espace équilibré : même largeur que l’icône
+                    const SizedBox(width: 30),
+
+                  ],
+                  ),
+                  
+                  
+                  
+
+                  
+                ),
+              ),
+            ),
+          ),
+          
+
+
+      // BOUTON ENREGISTRER
+      Align(
+      alignment: Alignment.bottomCenter,
+      child: ClipRect(
+        child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        // minimum: const EdgeInsets.only(bottom: 16), // marge pour ne pas toucher le bord inférieur
+        child: Padding(
+          padding: const EdgeInsets.all(paddingH),                
                 child: SizedBox(
                   width: fieldWidth, 
-                  height: 50,
+                  height: saveHeight,
+                  
                   child: ElevatedButton(
                     onPressed: _isSaving ? null : _saveUserData,
                   style: ElevatedButton.styleFrom(
                     //padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
                     backgroundColor: Color(0xFF357E50),
-                    //shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                   ),
                     child: _isSaving
                     ? const CircularProgressIndicator(color: Color(0xFF357E50))
@@ -447,16 +548,23 @@ child: PopScope(
               ),
                 ),
               ),
-
-              const SizedBox(height: 40),
-
-            ],
-          ),
         ),
-      
+      ),
+              ),
+
+              // const SizedBox(height: 40),       
+            
+            
+            
+            
+            ],
     ),
-    ),
-    ),
+    
+      ),
+      ),
+),
+
     );
+
   }
 }

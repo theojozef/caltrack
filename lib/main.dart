@@ -1,18 +1,30 @@
 // import 'package:cal_track_v1/Pages/tableaudebord.dart';
 //import 'package:cal_track_v1/Pages/loading_screen.dart';
+
 import 'package:cal_track_v1/Pages/connexion_page.dart';
-//import 'package:cal_track_v1/Pages/tableaudebord.dart';
+// import 'package:cal_track_v1/Pages/tableaudebord.dart';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 //import 'package:cal_track_v1/Pages/connexion_page.dart';
+import 'package:flutter/services.dart';
 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Forcer l'orientation portrait uniquement
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    // DeviceOrientation.portraitDown, // optionnel si vous voulez autoriser le portrait inversé
+  ]);
+  
+  
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,  // Initialisation de Firebase avec le fichier options
   );
+  
   runApp(MyApp());
 }
 
@@ -23,10 +35,11 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Cal\' Track',
-      theme: ThemeData(
+      //debugShowCheckedModeBanner: false,
+      theme: ThemeData(                
         primarySwatch: Colors.green,
       ),
-      /*home: const TableauDeBord(),*/
+      // home: const TableauDeBord(),
       home: const ConnexionPage(),
 
     );

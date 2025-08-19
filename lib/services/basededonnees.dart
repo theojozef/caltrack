@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:csv/csv.dart';
-import 'package:cal_track_v1/widgets/aliment.dart';
+import 'package:cal_track_v1/models/aliment.dart';
 
 Future<List<Aliment>> chargerAlimentsDepuisCSV() async {
   final data = await rootBundle.loadString('data/ciqual4.csv');
@@ -23,6 +23,8 @@ Future<List<Aliment>> chargerAlimentsDepuisCSV() async {
         proteines: double.tryParse(row[protIndex].toString().replaceAll(',', '.')) ?? 0,
         glucides: double.tryParse(row[glucIndex].toString().replaceAll(',', '.')) ?? 0,
         lipides: double.tryParse(row[lipIndex].toString().replaceAll(',', '.')) ?? 0,
+        fibres: double.tryParse(row[lipIndex].toString().replaceAll(',', '.')) ?? 0,
+        sucresLibres: double.tryParse(row[lipIndex].toString().replaceAll(',', '.')) ?? 0,
       );
     } catch (e) {
       return null;

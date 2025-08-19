@@ -1,4 +1,4 @@
-import 'package:cal_track_v1/widgets/aliment.dart';
+import 'package:cal_track_v1/models/aliment.dart';
 import 'package:cal_track_v1/widgets/quantite_aliment.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -17,17 +17,22 @@ class _ScanPageState extends State<ScanPage> {
   final Map<String, Aliment> baseProduits = {
     '3017620422003': Aliment( // Ex: Nutella
       nom: 'Nutella',
-      calories: 530,
+      calories: 539, //530
       proteines: 6,
       lipides: 31,
       glucides: 57,
+      fibres: 0,
+      sucresLibres: 56,
+      
     ),
     '1234567890123': Aliment(
       nom: 'Pâtes complètes',
-      calories: 350,
-      proteines: 12,
-      lipides: 2,
-      glucides: 70,
+      calories: 360, //350
+      proteines: 13, //12
+      lipides: 2, //2
+      glucides: 70, //70
+      fibres: 6,
+      sucresLibres: 0,
     ),
   };
 

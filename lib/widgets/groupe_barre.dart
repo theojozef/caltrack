@@ -52,7 +52,7 @@ class GroupeBarre extends StatefulWidget {
   const GroupeBarre({
     super.key,
     required this.titre,    
-    this.barWidth = 322,
+    required this.barWidth, // = 250, //322
     this.barHeight = 35, // 35
     this.cornerRadius = 23,
     this.borneHeight = 21,
@@ -70,7 +70,7 @@ class GroupeBarre extends StatefulWidget {
 class _GroupeBarreState extends State<GroupeBarre> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _sliderAnimation;
-  double _currentSliderValue = 0.0;
+  double currentSliderValue = 0.0;
 
   @override
   void initState() {
@@ -78,12 +78,13 @@ class _GroupeBarreState extends State<GroupeBarre> with SingleTickerProviderStat
     
     // Initialisation de l'AnimationController
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 700),
+      duration: const Duration(milliseconds: 1200), //700
       vsync: this,
     );
 
      final colorLimites = getColorLimites(widget.barWidth);
-     _currentSliderValue = getSliderValueFromCompteurCalories(
+     
+     double currentSliderValue = getSliderValueFromCompteurCalories(
       widget.compteurCalories,
       widget.valeurMin,
       widget.valeurMax,
@@ -91,17 +92,33 @@ class _GroupeBarreState extends State<GroupeBarre> with SingleTickerProviderStat
       colorLimites['rightSoft']!,
     );
 
-    // Création de l'animation de la position du slider
-    _sliderAnimation = Tween<double>(begin: _currentSliderValue, end: _currentSliderValue).animate(
+    // Création de l'animation de la position du slider (Initialisation)
+    _sliderAnimation = Tween<double>(begin: 0.0, end: currentSliderValue).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
+
+    // 🔹 Ajout du listener juste après la création de l'animation
+    _controller.addListener(() {
+      setState(() {
+      // À chaque frame d'animation, on rebuild pour mettre à jour la position
+    });
+    
+    // Lancer l’animation dès l’ouverture
+    
+
+  });
+  _controller.forward();
+
   }
 
   @override
   void didUpdateWidget(covariant GroupeBarre oldWidget) {
     super.didUpdateWidget(oldWidget);
+    
     // Lorsque la valeur change, on démarre l'animation
-    if (widget.compteurCalories != oldWidget.compteurCalories) {
+    if (widget.compteurCalories != oldWidget.compteurCalories ||
+      widget.valeurMin != oldWidget.valeurMin ||
+      widget.valeurMax != oldWidget.valeurMax) {   
       
       final colorLimites = getColorLimites(widget.barWidth);
 
@@ -114,15 +131,18 @@ class _GroupeBarreState extends State<GroupeBarre> with SingleTickerProviderStat
       );
 
       // Met à jour la fin de l'animation pour que la position finale soit correcte
-      _sliderAnimation = Tween<double>(begin: _currentSliderValue, end: sliderValue).animate(
+      _sliderAnimation = Tween<double>(begin: currentSliderValue, end: sliderValue).animate(
         CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
       );
 
+      
+
       // Démarre l'animation
+      //_controller.reset();
       _controller.forward(from: 0.0);
       
       // ✅ Met à jour la valeur actuelle pour la prochaine animation
-      _currentSliderValue = sliderValue;
+      currentSliderValue = sliderValue;
     }
   }
 
@@ -171,9 +191,9 @@ class _GroupeBarreState extends State<GroupeBarre> with SingleTickerProviderStat
           child: AnimatedBuilder(
           animation: _sliderAnimation,
           builder: (context, child) {
-            final animatedSliderValue = _sliderAnimation.value;
-            final color = getBarColor(animatedSliderValue, width);
-            final sliderPosition = animatedSliderValue * (width - 30) + 15;
+            //final animatedSliderValue = _sliderAnimation.value;
+            final color = getBarColor(_sliderAnimation.value, width);
+            //final sliderPosition = animatedSliderValue * (width - 30) + 15;
           return Stack(
             children: [
               _buildAnimatedBar(color),
@@ -181,15 +201,20 @@ class _GroupeBarreState extends State<GroupeBarre> with SingleTickerProviderStat
               //_buildLimites(width, widget.valeurMin),
               //_buildLimites(width, widget.valeurMax),
                             
-              SliderButton( // bouton slider                
-                position: sliderPosition // Value * (width - 30) + 15,
+              // CURSEUR
+              SliderButton(                 
+                position: _sliderAnimation.value * (width - 30) + 15  // Value * (width - 30) + 15,
                 /* onMove: (delta) {
                   setState(() {
                     sliderValue += delta / (width); // (width - 30)
                     sliderValue = sliderValue.clamp(0.0, 1.0);
                   });
                 //},*/
+
+                
+
               ),
+              
               ValeurCompteur(
                 position: _getValeurPosition(widget.compteurCalories, widget.valeurMin, widget.valeurMax, width), // width * 0.5,
                 valeuraffichee: widget.compteurCalories.round().toDouble(),
@@ -278,6 +303,3 @@ class _GroupeBarreState extends State<GroupeBarre> with SingleTickerProviderStat
   ),
 );  
 }
-
-
-

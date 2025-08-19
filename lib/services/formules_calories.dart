@@ -71,10 +71,12 @@ class CalculateurNutrition {
     return (valeur / 100).round() * 100;
   }
 
+  static const double margeMin = 20;
+
   Map<String, int> getMacros() {
   final calories = calculCalories();
-  final caloriesMin = calories['calories_min']!;
-  final caloriesMax = calories['calories_max']!;
+  int caloriesMin = calories['calories_min']!;
+  int caloriesMax = calories['calories_max']!;
 
   final protMin1 = _calculPdc() * coefSport; //user.poids
   final protMin2 = (caloriesMin * 0.15) / 4;
@@ -84,13 +86,37 @@ class CalculateurNutrition {
   final protMax2 = (caloriesMax * 0.2) / 4;
   final protMax = (protMax1 > protMax2 ? protMax1 : protMax2).round();
 
-  final lipidesMin1 = ((user.taille - 150) * 0.5) + 30;
-  final lipidesMin2 = (caloriesMin * 0.2) / 9;
-  final lipidesMin = (lipidesMin1 > lipidesMin2 ? lipidesMin1 : lipidesMin2).round();
-  final lipidesMax = ((caloriesMax * 0.3) / 9).round();
+  int lipidesMin1 = (((user.taille - 150) * 0.5) + 30).round();
+  int lipidesMin2 = ((caloriesMin * 0.2) / 9).round();
+  int lipidesMin = (lipidesMin1 > lipidesMin2 ? lipidesMin1 : lipidesMin2).round();
+  int lipidesMax = ((caloriesMax * 0.3) / 9).round();
 
-  final glucidesMin = ((caloriesMin - (4 * protMax) - (9 * lipidesMax)) / 4).round();
-  final glucidesMax = ((caloriesMax - (4 * protMin) - (9 * lipidesMin)) / 4).round();
+  int glucidesMin = ((caloriesMin - (4 * protMax) - (9 * lipidesMax)) / 4).round();
+  int glucidesMax = ((caloriesMax - (4 * protMin) - (9 * lipidesMin)) / 4).round();
+
+  // --- Sécurités ---
+  if (lipidesMax < lipidesMin + margeMin) {
+    lipidesMax = lipidesMin + margeMin.toInt();
+  }
+
+  if (glucidesMin < 0) {
+    glucidesMin = 0;
+  }
+
+  if (glucidesMax < margeMin) {
+    glucidesMax = margeMin.toInt();
+  }
+
+  if (caloriesMin < (4*protMin + 4*lipidesMin)) {
+    caloriesMin = (4*protMin + 4*lipidesMin);
+  }
+  // ---------------------------
+
+  // ✅ Calcul des fibres
+  int fibresMin = (caloriesMin * 10 / 1000).round();
+  int fibresMax = (caloriesMax * 15 / 1000).round();
+
+  // ---------------------------
 
   return {
     'calories_min': caloriesMin,
@@ -101,8 +127,72 @@ class CalculateurNutrition {
     'lipides_max': lipidesMax,
     'glucides_min': glucidesMin,
     'glucides_max': glucidesMax,
+    'fibres_min': fibresMin,
+    'fibres_max': fibresMax,
   };
 }
+
+  Map<String, int> getMacrosNewCalories(int caloriesMin, int caloriesMax) {
+  final protMin1 = _calculPdc() * coefSport;
+  final protMin2 = (caloriesMin * 0.15) / 4;
+  final protMin = (protMin1 > protMin2 ? protMin1 : protMin2).round();
+
+  final protMax1 = pdc * 1.9;
+  final protMax2 = (caloriesMax * 0.2) / 4;
+  final protMax = (protMax1 > protMax2 ? protMax1 : protMax2).round();
+
+  int lipidesMin1 = (((user.taille - 150) * 0.5) + 30).round();
+  int lipidesMin2 = ((caloriesMin * 0.2) / 9).round();
+  int lipidesMin = (lipidesMin1 > lipidesMin2 ? lipidesMin1 : lipidesMin2).round();
+  int lipidesMax = ((caloriesMax * 0.3) / 9).round();
+
+  int glucidesMin = ((caloriesMin - (4 * protMax) - (9 * lipidesMax)) / 4).round();
+  int glucidesMax = ((caloriesMax - (4 * protMin) - (9 * lipidesMin)) / 4).round();
+
+  // --- Sécurités ---
+  if (lipidesMax < lipidesMin + margeMin) {
+    lipidesMax = lipidesMin + margeMin.toInt();
+  }
+
+  if (glucidesMin < 0) {
+    glucidesMin = 0;
+  }
+
+  if (glucidesMin > glucidesMax - margeMin) {
+    glucidesMin = (glucidesMax - margeMin).toInt();
+  }
+
+  if (glucidesMax < margeMin) {
+    glucidesMax = margeMin.toInt();
+  }
+
+  if (glucidesMax > 1000) {
+    glucidesMax = 1000;
+  }
+
+  if (caloriesMin < (4*protMin + 4*lipidesMin)) {
+    caloriesMin = (4*protMin + 4*lipidesMin);
+  }
+  // ---------------------------
+
+  int fibresMin = (caloriesMin * 10 / 1000).round();
+  int fibresMax = (caloriesMax * 15 / 1000).round();
+
+  // ---------------------------
+
+  return {
+    'prot_min': protMin,
+    'prot_max': protMax,
+    'lipides_min': lipidesMin,
+    'lipides_max': lipidesMax,
+    'glucides_min': glucidesMin,
+    'glucides_max': glucidesMax,
+    'fibres_min': fibresMin,
+    'fibres_max': fibresMax,
+  };
+}
+
+
 
 double getCoefActivite(String nActivite) {
   switch (nActivite.toLowerCase()) {

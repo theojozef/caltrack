@@ -1,24 +1,25 @@
+import 'dart:ui';
 import 'package:cal_track_v1/Pages/deconnexion.dart';
 import 'package:cal_track_v1/Pages/donnees_utilisateur.dart';
 import 'package:cal_track_v1/Pages/liste_aliments_page.dart';
 import 'package:cal_track_v1/models/user_data.dart';
 import 'package:cal_track_v1/services/formules_calories.dart';
 import 'package:cal_track_v1/services/local_storage_service.dart';
-import 'package:cal_track_v1/widgets/aliment.dart';
+import 'package:cal_track_v1/models/aliment.dart';
+import 'package:cal_track_v1/widgets/quantite_aliment.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cal_track_v1/widgets/groupe_barre.dart';
+
+// import 'connexion_page.dart';
+
+//import 'connexion_page.dart';
 //import 'package:shared_preferences/shared_preferences.dart';
 
 
-
-class TableauDeBord extends StatefulWidget {
-  //final User? user;
-  
-  const TableauDeBord({super.key});
-
-  //final UserModel userData;
+class TableauDeBord extends StatefulWidget {    
+  const TableauDeBord({super.key});  
   
   @override
   State<TableauDeBord> createState() => _TableauDeBordState();
@@ -36,13 +37,17 @@ class _TableauDeBordState extends State<TableauDeBord> {
   late double glucidesMax;
   late double caloriesMin;
   late double caloriesMax;
+  // late double fibresMin;
+  // late double fibresMax;
   
   double compteurkcal = 0;
   double compteurProteines = 0;
   double compteurLipides = 0;
   double compteurGlucides = 0;
+  // double compteurFibres = 0;
+  // double compteurSucresLibres = 0;
 
-  UserModel? _userData; // UserModel? _userData;
+  UserModel? _userData;
   
   DateTime? _derniereDateMaj;
 
@@ -56,58 +61,110 @@ class _TableauDeBordState extends State<TableauDeBord> {
   void initState() {
     super.initState();
 
-    _initializeData();
-
-  // Essaye de charger en local d'abord
-  /*LocalStorageService.loadUserData().then((localUser) {
-    if (localUser != null) {
-      setState(() {
-        _userData = localUser;
-        _mettreAJourDonneesUtilisateur(localUser);
-        _verifierEtReinitialiserAliments();
-        _isLoading = false;
-      });
-    }
-  });*/
-
-  // Charge ensuite les données Firebase à jour et écrase si besoin    
-  /*fetchUserData().then((user) {    
     
-      setState(() {
-        _userData = user;        
-        _isLoading = false;
-        // Mettre à jour l'affichage si nécessaire
-          
-    if (user != null) {
-      _mettreAJourDonneesUtilisateur(user); // <- Important, ici on initialise les macros
-      _verifierEtReinitialiserAliments();
-    }
-    });
-  });*/
 
-/*
-  LocalStorageService.loadAlimentsDuJour().then((aliments) {
-  final maintenant = DateTime.now();
-  final aujourdHui = DateTime(maintenant.year, maintenant.month, maintenant.day);
-  setState(() {
-    _derniereDateMaj = aujourdHui;
-    _alimentsDuJour.clear();
-    _alimentsDuJour.addAll(aliments);
+    _initializeData();
+  }
+
+Future<void> _initializeData() async {
+  
+  final userId = FirebaseAuth.instance.currentUser?.uid;
+  
+  /* if (FirebaseAuth.instance.currentUser != null) {
+      
+      Future.microtask(() {
+        if (!mounted) return;
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => ConnexionPage()),
+        );
+      });
+    } */
+
+  setState(() { _isLoading = true; });
+
+
+  // ÉRAPE 1 : Charger données locales
+  
+  final localUser = await LocalStorageService.loadUserData(userId!);
+  final localMacros = await LocalStorageService.loadMacros(userId);
+  final aliments = await LocalStorageService.loadAlimentsDuJour(userId);
+
+  if (localUser != null) {
+    _userData = localUser;
+    _mettreAJourDonneesUtilisateur(localUser);
+  }
+
+  if (localMacros != null) {
+    caloriesMin = localMacros['calories_min']!.toDouble();
+    caloriesMax = localMacros['calories_max']!.toDouble();
+    protMin = localMacros['prot_min']!.toDouble();
+    protMax = localMacros['prot_max']!.toDouble();
+    lipidesMin = localMacros['lipides_min']!.toDouble();
+    lipidesMax = localMacros['lipides_max']!.toDouble();
+    glucidesMin = localMacros['glucides_min']!.toDouble();
+    glucidesMax = localMacros['glucides_max']!.toDouble();
+    // fibresMin = localMacros['fibres_min']!.toDouble();
+    // fibresMax = localMacros['fibres_max']!.toDouble();
+  }
+
+  if (localMacros == null) {_mettreAJourDepuisFirebase(userId);}
+
+  _chargerAlimentsEtCompteurs(aliments); //!! AJOUTER FONCTION ??
+
+  // ÉTAPE 2 : Vérifier changement de jour
+  
+  await _verifierEtReinitialiserAliments();
+  
+  setState(() => _isLoading = false);
+
+  // ÉTAPE 3 : Mise à jour Firebase (asynchrone, ne bloque pas l'UI)
+  //_mettreAJourDepuisFirebase(userId);
+}
+  
+  // Charger données Firebase (prioritaire)
+  Future<void> _mettreAJourDepuisFirebase(String userId) async {
+    
+  final userFromFirebase = await fetchUserData();
+
+  if (userFromFirebase != null) {
+    setState(() {
+    _userData = userFromFirebase;
+    _mettreAJourDonneesUtilisateur(userFromFirebase); // => sauvegarde aussi les macros localement
+    _isLoading = false;
+  });  
+  }  
+  }
+   
+  Future<void> _chargerAlimentsEtCompteurs(List<AlimentConsomme> aliments) async {
+  // final maintenant = DateTime.now();
+  // final _derniereDateMaj = DateTime(maintenant.year, maintenant.month, maintenant.day);
+  
+       
+  _alimentsDuJour
+    ..clear()
+    ..addAll(aliments);
+
+    compteurkcal = 0;
+    compteurProteines = 0;
+    compteurLipides = 0;
+    compteurGlucides = 0;
+    // compteurFibres = 0;
+    // compteurSucresLibres = 0;
+
     for (var aliment in aliments) {
       final macros = aliment.aliment.getMacrosPourQuantite(aliment.quantite);
       compteurkcal += macros['calories'] ?? 0;
       compteurProteines += macros['proteines'] ?? 0;
       compteurLipides += macros['lipides'] ?? 0;
       compteurGlucides += macros['glucides'] ?? 0;
+      // compteurFibres += macros['fibres'] ?? 0;
+      // compteurSucresLibres += macros['sucres'] ?? 0;
+
     }
-  });
-});
-*/
-
-//_loadUserDataAndCalculate();
-
-}
-
+  }
+  
 /*Future<void> _loadUserData() async {
   final uid = FirebaseAuth.instance.currentUser?.uid;
   if (uid == null) return;
@@ -131,8 +188,8 @@ class _TableauDeBordState extends State<TableauDeBord> {
   }
 }*/
 
-// PEUT ETRE PA SUPPRIMER !!!
-Future<UserModel?> fetchUserData() async {
+// PEUT ETRE A SUPPRIMER !!!
+  Future<UserModel?> fetchUserData() async {
   
     final userId = FirebaseAuth.instance.currentUser!.uid;
     
@@ -152,100 +209,10 @@ Future<UserModel?> fetchUserData() async {
   return null;
 }
 
-/*Future<void> _loadUserDataAndCalculate() async {
-    // Exemple avec SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-
-
-    final user = await LocalStorageService.loadUserData(userId);
-    
-    _mettreAJourDonneesUtilisateur(user);
-    _verifierEtReinitialiserAliments();
-
-  }*/
-
-Future<void> _initializeData() async {
-  final userId = FirebaseAuth.instance.currentUser?.uid;
-  if (userId == null) return;
-
-  setState(() {
-    _isLoading = true;
-  });
-
-  // Charger user data localement
-  final localUser = await LocalStorageService.loadUserData(userId);
-  
-  // Charger données Firebase (prioritaire)
-  final userFromFirebase = await fetchUserData();
-
-  if (userFromFirebase != null) {
-    setState(() {
-    _userData = userFromFirebase;
-    _mettreAJourDonneesUtilisateur(userFromFirebase); // => sauvegarde aussi les macros localement
-    _isLoading = false;
-  });
-  
-   } else if (localUser != null) {
-    setState(() {
-      _userData = localUser;
-      _mettreAJourDonneesUtilisateur(localUser);
-      _isLoading = false;
-    });
-  } else {   
-   // Pas de données utilisateur, garder _isLoading false
-    setState(() {
-      _isLoading = false;
-    });   
-  }
-
-  // Étape 2 : Charger les macros calculées (après maj)
-  /*final localMacros = await LocalStorageService.loadMacros(userId);
-  if (localMacros != null) {
-    
-    setState(() {
-    caloriesMin = localMacros['calories_min']!;
-    caloriesMax = localMacros['calories_max']!;
-    protMin = localMacros['prot_min']!;
-    protMax = localMacros['prot_max']!;
-    lipidesMin = localMacros['lipides_min']!;
-    lipidesMax = localMacros['lipides_max']!;
-    glucidesMin = localMacros['glucides_min']!;
-    glucidesMax = localMacros['glucides_max']!;
-  });
-}*/
-
-  // Étape 3 : Charger les aliments du jour (après avoir chargé user et macros)
-  final aliments = await LocalStorageService.loadAlimentsDuJour(userId);
-  final maintenant = DateTime.now();
-  final aujourdHui = DateTime(maintenant.year, maintenant.month, maintenant.day);
-
-  setState(() {
-    _derniereDateMaj = aujourdHui;    
-    _alimentsDuJour.clear();
-    _alimentsDuJour.addAll(aliments);
-
-    compteurkcal = 0;
-    compteurProteines = 0;
-    compteurLipides = 0;
-    compteurGlucides = 0;
-
-    for (var aliment in aliments) {
-      final macros = aliment.aliment.getMacrosPourQuantite(aliment.quantite);
-      compteurkcal += macros['calories'] ?? 0;
-      compteurProteines += macros['proteines'] ?? 0;
-      compteurLipides += macros['lipides'] ?? 0;
-      compteurGlucides += macros['glucides'] ?? 0;
-    }
-  });
-
-  _verifierEtReinitialiserAliments();
-
-}
-
   void _mettreAJourDonneesUtilisateur(UserModel user) {
-    
-    final calculateur = CalculateurNutrition(user);
-    final macros = calculateur.getMacros();
+  
+  final calculateur = CalculateurNutrition(user);
+  final macros = calculateur.getMacros();
     
  setState(() {
     caloriesMin = macros['calories_min']!.toDouble();
@@ -256,6 +223,8 @@ Future<void> _initializeData() async {
     lipidesMax = macros['lipides_max']!.toDouble();
     glucidesMin = macros['glucides_min']!.toDouble();
     glucidesMax = macros['glucides_max']!.toDouble();
+    // fibresMin = macros['fibres_min']!.toDouble();
+    // fibresMax = macros['fibres_max']!.toDouble();
   });
 
     final userId = FirebaseAuth.instance.currentUser?.uid;
@@ -264,14 +233,54 @@ Future<void> _initializeData() async {
   }
   }
 
+// Vérifier si les aliments du jour doivent être réinitialisés (nouvelle journée)
+  Future<void> _verifierEtReinitialiserAliments() async {
+  final userId = FirebaseAuth.instance.currentUser?.uid ?? "offline_user";
+    
+  final maintenant = DateTime.now();
+  final aujourdHui = DateTime(maintenant.year, maintenant.month, maintenant.day);
+
+  if (_derniereDateMaj == null ||
+      _derniereDateMaj!.year != aujourdHui.year ||
+      _derniereDateMaj!.month != aujourdHui.month ||
+      _derniereDateMaj!.day != aujourdHui.day) {
+    setState(() {
+      _alimentsDuJour.clear();
+      compteurkcal = 0;
+      compteurProteines = 0;
+      compteurLipides = 0;
+      compteurGlucides = 0;
+      // compteurFibres = 0;
+      // compteurSucresLibres = 0;
+      
+      _derniereDateMaj = aujourdHui;
+    });
+    
+  // Sauvegarder liste vide uniquement après avoir confirmé nouvelle journée
+  await LocalStorageService.saveAlimentsDuJour(userId, _alimentsDuJour);
+
+    }
+  }
+
   void _ouvrirListeAliments() {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ListeAlimentsPage(
-          onAlimentAjoute: (Aliment aliment, double quantite) {
+          onAlimentAjoute: (Aliment aliment, double quantite, Portion portionChoisie) {
+          
+          // Convertir la quantité en grammes
+          double quantiteEnGrammes;
+          if (portionChoisie.nom == "g") {
+            quantiteEnGrammes = quantite; // déjà en grammes
+          } else {
+            quantiteEnGrammes = quantite * portionChoisie.poids;
+          }            
+        
         // Gère ici l’ajout avec la bonne quantité
-        _ajouterAliment(aliment, quantite, aliment.getMacrosPourQuantite(quantite));
+        _ajouterAliment(aliment, 
+                        quantiteEnGrammes, 
+                        aliment.getMacrosPourQuantite(quantiteEnGrammes));
           },
           ),
       ),
@@ -283,12 +292,21 @@ Future<void> _initializeData() async {
     if (userId == null) return;
     
     setState(() {
+
+      // ✅ Marquer l’aliment comme déjà ajouté
+      aliment.dejaAjoute = true;
+
+      // Ajouter à la liste du jour
       _alimentsDuJour.add(AlimentConsomme(aliment, quantite));      
+      
       // Mise à jour des compteurs
       compteurkcal += macros['calories'] ?? 0;
       compteurProteines += macros['proteines'] ?? 0;
       compteurGlucides += macros['glucides'] ?? 0;
       compteurLipides += macros['lipides'] ?? 0;
+      // compteurFibres += macros['fibres'] ?? 0;
+      // compteurSucresLibres += macros['sucres'] ?? 0;
+      
     });
 
     await LocalStorageService.saveAlimentsDuJour(userId, _alimentsDuJour);
@@ -304,42 +322,178 @@ Future<void> _initializeData() async {
       compteurProteines -= macros['proteines'] ?? 0;
       compteurGlucides -= macros['glucides'] ?? 0;
       compteurLipides -= macros['lipides'] ?? 0;
+      // compteurFibres -= macros['fibres'] ?? 0;
+      // compteurSucresLibres -= macros['sucres'] ?? 0;
      
       // Empêche des valeurs négatives dues aux arrondis
       compteurkcal = compteurkcal.clamp(0, double.infinity);
       compteurProteines = compteurProteines.clamp(0, double.infinity);
       compteurGlucides = compteurGlucides.clamp(0, double.infinity);
-      compteurLipides = compteurLipides.clamp(0, double.infinity);    
+      compteurLipides = compteurLipides.clamp(0, double.infinity); 
+      // compteurFibres = compteurFibres.clamp(0, double.infinity);
+      // compteurSucresLibres = compteurSucresLibres.clamp(0, double.infinity);   
   });
   }
   
-  void _verifierEtReinitialiserAliments() {
-  final userId = FirebaseAuth.instance.currentUser?.uid;
-  
-  final maintenant = DateTime.now();
-  final aujourdHui = DateTime(maintenant.year, maintenant.month, maintenant.day);
+  void _modifierAliment(AlimentConsomme alimentConsomme) async {
 
-  if (_derniereDateMaj == null ||
-      _derniereDateMaj!.year != aujourdHui.year ||
-      _derniereDateMaj!.month != aujourdHui.month ||
-      _derniereDateMaj!.day != aujourdHui.day) {
+    final result = await Navigator.push(
+      context,
+    MaterialPageRoute(
+      builder: (_) => QuantiteAliment(
+        aliment: alimentConsomme.aliment,
+           // passer la portion initiale
+      ),
+    ),
+  );
+
+
+  // CORRECT !! 
+  if (result != null && result['quantite'] != null) {
+
+    double nouvelleQuantite = result['quantite'];
+    Portion? nouvellePortion = result['portionChoisie'];
+
+    // Calcul de la quantité en grammes selon la portion
+    double quantiteEnGrammes;
+    if (nouvellePortion != null && nouvellePortion.nom != "g") {
+      quantiteEnGrammes = nouvelleQuantite * nouvellePortion.poids;
+    } else {
+      quantiteEnGrammes = nouvelleQuantite;
+    }
+    
+    final oldMacros = alimentConsomme.aliment.getMacrosPourQuantite(alimentConsomme.quantite);
+    final newMacros = alimentConsomme.aliment.getMacrosPourQuantite(quantiteEnGrammes);
+
     setState(() {
-      _alimentsDuJour.clear();
-      compteurkcal = 0;
-      compteurProteines = 0;
-      compteurLipides = 0;
-      compteurGlucides = 0;
-      _derniereDateMaj = aujourdHui;
-    });
-  }
+      // Mettre à jour la quantité
+      alimentConsomme.quantite = quantiteEnGrammes;
 
-  LocalStorageService.saveAlimentsDuJour(userId!, _alimentsDuJour);
-  
+      // Ajuster les compteurs
+      compteurkcal = compteurkcal - (oldMacros['calories'] ?? 0) + (newMacros['calories'] ?? 0);
+      compteurProteines = compteurProteines - (oldMacros['proteines'] ?? 0) + (newMacros['proteines'] ?? 0);
+      compteurGlucides = compteurGlucides - (oldMacros['glucides'] ?? 0) + (newMacros['glucides'] ?? 0);
+      compteurLipides = compteurLipides - (oldMacros['lipides'] ?? 0) + (newMacros['lipides'] ?? 0);
+      // compteurFibres = compteurFibres - (oldMacros['fibres'] ?? 0) + (newMacros['fibres'] ?? 0);
+      // compteurLipides = compteurLipides - (oldMacros['sucres'] ?? 0) + (newMacros['sucres'] ?? 0);
+    });
+
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId != null) {
+      await LocalStorageService.saveAlimentsDuJour(userId, _alimentsDuJour);
+    }
+  }
 }
 
-  static const double gap = 40;
+  int _arrondir100(double valeur) {
+  return (valeur / 100).round() * 100;
+  }
 
-  // barres de progressions
+  Future<void> _baisserCalories() async {
+  // Diminue les calories min/max de 100
+  setState(() {
+    caloriesMin = (caloriesMin - 100).clamp(0, double.infinity);
+    caloriesMax = (caloriesMax - 100).clamp(0, double.infinity);
+
+    if (caloriesMin < (4*protMin + 9*lipidesMin)) {
+    caloriesMin = _arrondir100(4*protMin + 9*lipidesMin).toDouble();
+    caloriesMax = _arrondir100(caloriesMin + 200).toDouble();    
+    }
+ 
+
+    // Recalcule les macros proportionnellement
+    if (_userData != null) {
+      final calculateur = CalculateurNutrition(_userData!);
+      final nouvellesMacros = calculateur.getMacrosNewCalories(caloriesMin.round(), caloriesMax.round());
+
+      protMin = nouvellesMacros['prot_min']!.toDouble();
+      protMax = nouvellesMacros['prot_max']!.toDouble();
+      lipidesMin = nouvellesMacros['lipides_min']!.toDouble();
+      lipidesMax = nouvellesMacros['lipides_max']!.toDouble();
+      glucidesMin = nouvellesMacros['glucides_min']!.toDouble();
+      glucidesMax = nouvellesMacros['glucides_max']!.toDouble();
+      // fibresMin = nouvellesMacros['fibres_min']!.toDouble();
+      // fibresMax = nouvellesMacros['fibres_max']!.toDouble();
+
+    }
+
+  });
+
+  // Sauvegarde en local
+  final userId = FirebaseAuth.instance.currentUser?.uid;
+  if (userId != null) {
+    await LocalStorageService.saveMacros(userId,  {
+      'calories_min': caloriesMin.round(),
+      'calories_max': caloriesMax.round(),
+      'prot_min': protMin.round(),
+      'prot_max': protMax.round(),
+      'lipides_min': lipidesMin.round(),
+      'lipides_max': lipidesMax.round(),
+      'glucides_min': glucidesMin.round(),
+      'glucides_max': glucidesMax.round(),
+      // 'fibres_min': fibresMin.round(),
+      // 'fibres_max': fibresMax.round(),
+    });
+  }
+  }
+  
+  Future<void> _monterCalories() async {
+  // Augmente les calories min/max de 100
+  setState(() {
+    caloriesMin = (caloriesMin + 100).clamp(0, double.infinity);
+    caloriesMax = (caloriesMax + 100).clamp(0, double.infinity);
+
+    if (glucidesMax == 1000) {       
+            
+      caloriesMax = _arrondir100((4*glucidesMax) + (4 * protMin) + (9 * lipidesMin)).toDouble();
+
+      caloriesMin = caloriesMax - 200;
+    }
+
+    // Recalcule les macros proportionnellement
+    if (_userData != null) {
+      final calculateur = CalculateurNutrition(_userData!);
+      final nouvellesMacros = calculateur.getMacrosNewCalories(caloriesMin.round(), caloriesMax.round());
+
+      protMin = nouvellesMacros['prot_min']!.toDouble();
+      protMax = nouvellesMacros['prot_max']!.toDouble();
+      lipidesMin = nouvellesMacros['lipides_min']!.toDouble();
+      lipidesMax = nouvellesMacros['lipides_max']!.toDouble();
+      glucidesMin = nouvellesMacros['glucides_min']!.toDouble();
+      glucidesMax = nouvellesMacros['glucides_max']!.toDouble();
+      // fibresMin = nouvellesMacros['fibres_min']!.toDouble();
+      // fibresMax = nouvellesMacros['fibres_max']!.toDouble();
+    }
+    
+  });
+
+  // Sauvegarde en local
+  final userId = FirebaseAuth.instance.currentUser?.uid;
+  if (userId != null) {
+    await LocalStorageService.saveMacros(userId, {
+      'calories_min': caloriesMin.round(),
+      'calories_max': caloriesMax.round(),
+      'prot_min': protMin.round(),
+      'prot_max': protMax.round(),
+      'lipides_min': lipidesMin.round(),
+      'lipides_max': lipidesMax.round(),
+      'glucides_min': glucidesMin.round(),
+      'glucides_max': glucidesMax.round(),
+      // 'fibres_min': fibresMin.round(),
+      // 'fibres_max': fibresMax.round(),
+    });
+  }
+  }
+
+
+  static const double gap = 40;
+  static const double ajustBoutonheight = 30;
+  static const double dashbarWidth = 320.0;
+  static const double separatorWidth = ((0.5*dashbarWidth) - ajustBoutonWidth) ;
+  static const double topBarH = 85;
+  static const double ajustBoutonWidth = 50;
+
+  // UI
   @override
   Widget build(BuildContext context) {
 
@@ -353,6 +507,8 @@ Future<void> _initializeData() async {
     ),
   );
 }
+
+
   
     return Scaffold(
       backgroundColor: const Color(0xFF393939),
@@ -361,13 +517,18 @@ Future<void> _initializeData() async {
       child: Center( // Centre horizontalement
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.85,
+          //maxWidth: MediaQuery.of(context).size.width * 0.85,
         ),
-
-        child: ListView(
+            child: Stack( //Column
+              //crossAxisAlignment: CrossAxisAlignment.center,
+          children: [          
+        
+        Padding(
+              padding: const EdgeInsets.only(top: 0), // espace en haut pour le texte + zone floutée 
+          child: ListView(
           physics: BouncingScrollPhysics(), //Column
           children: [
-            const SizedBox(height: 40),
+            SizedBox(height: MediaQuery.of(context).size.height * 0.15), // ← zone vide pour ne pas recouvrir la zone floutée
             
             //BOX COULEUR TEST REPSONSIVE
             /*SizedBox(
@@ -377,40 +538,97 @@ Future<void> _initializeData() async {
                   color: Colors.red
                   )
             ),
-            */
-                
-            SizedBox(
-              width: 300,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [Text('Aujourd\'hui',
-                style : const TextStyle(
-                  color: Color(0xFFFFFFFF),
-                  fontSize: 12,
-                ),
-              ), 
-              
-                ]     
-              ),
-            ),
-
-
-
-            const SizedBox(height: 40),
+            */                   
 
             GroupeBarre(
               titre: "Calories",
               valeurMin: caloriesMin,
               valeurMax: caloriesMax,
               compteurCalories: compteurkcal,
-            ),
-            const SizedBox(height: gap),
+              barWidth: dashbarWidth,
+            ),        
+            
+            const SizedBox(height: 7),
 
+            //BOUTONS D'AJUSTEMENT
+            SizedBox(  
+  height: ajustBoutonheight,
+  child: Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      
+      // Bouton gauche (-)
+      SizedBox(
+        width: ajustBoutonWidth, //(dashbarWidth - (separatorWidth) ) /2,
+        child: GestureDetector(
+          onTap:
+
+            _baisserCalories, // 👇 Personnalise ici le comportement du bouton -
+          
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color.fromARGB(115, 43, 43, 43),
+              borderRadius: BorderRadius.circular(ajustBoutonheight
+                // topLeft: Radius.circular(ajustBoutonheight),
+                // bottomLeft: Radius.circular(ajustBoutonheight),
+              ),
+              //border: Border.all(color: Colors.white, width: 1),
+            ),
+            child: const Center(
+              child: Icon(
+                Icons.arrow_drop_down, 
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ),
+
+      // Séparation visible entre les deux
+      Container(        
+        width: separatorWidth,
+        alignment: Alignment.center,                    
+        color: Colors.transparent, //const Color(0xFF393939),
+        child: Text("Ajuster les besoins",
+        style: TextStyle(fontSize: ajustBoutonheight/3, 
+        color: Colors.white)        )      
+      ),
+
+      // Bouton droit (+)
+      SizedBox(
+        width: ajustBoutonWidth, //(dashbarWidth - separatorWidth) /2,
+        child: GestureDetector(
+          onTap: 
+
+          _monterCalories, // 👇 Personnalise ici le comportement du bouton +
+          
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color.fromARGB(115, 43, 43, 43),
+              borderRadius: BorderRadius.circular(ajustBoutonheight
+                // topRight: Radius.circular(ajustBoutonheight),
+                // bottomRight: Radius.circular(ajustBoutonheight),
+              ),
+              //border: Border.all(color: Colors.white, width: 1),
+            ),
+            child: const Center(
+              child: Icon(Icons.arrow_drop_up, color: Colors.white),
+            ),
+          ),
+        ),
+      ),
+    ],
+  ),
+),
+
+            const SizedBox(height: gap),
+            
             GroupeBarre(
               titre: "Protéines",
               valeurMin: protMin,
               valeurMax: protMax,
               compteurCalories: compteurProteines,
+              barWidth: dashbarWidth,
             ),
             const SizedBox(height: gap),
 
@@ -419,6 +637,7 @@ Future<void> _initializeData() async {
               valeurMin: lipidesMin,
               valeurMax: lipidesMax,
               compteurCalories: compteurLipides,
+              barWidth: dashbarWidth,
             ),
             
             const SizedBox(height: gap),
@@ -428,8 +647,20 @@ Future<void> _initializeData() async {
               valeurMin: glucidesMin,
               valeurMax: glucidesMax,
               compteurCalories: compteurGlucides,
+              barWidth: dashbarWidth,
             ),
             
+            // const SizedBox(height: gap),
+
+            /* //BARRE FIBRE
+            GroupeBarre(
+              titre: "Fibres",
+              valeurMin: fibresMin,
+              valeurMax: fibresMax,
+              compteurCalories: compteurFibres,
+              barWidth: dashbarWidth,
+            ), */
+
             const SizedBox(height: gap),
 
             Center(
@@ -437,7 +668,9 @@ Future<void> _initializeData() async {
               width: 50,
               height: 50,
               child: ElevatedButton(
+                
                 onPressed: _ouvrirListeAliments,
+
               style: ElevatedButton.styleFrom(
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(15), // optionnel : coins arrondis
@@ -450,7 +683,7 @@ Future<void> _initializeData() async {
                   child: Icon(
                     Icons.add,
                     color: Colors.black, // couleur personnalisée de l'icône
-                    size: 30, // taille de l'icône
+                    size: 40, // 30 taille de l'icône
                     ),
             ),
               ),
@@ -458,20 +691,13 @@ Future<void> _initializeData() async {
             ),
 
             const SizedBox(height: gap),
-
-            SizedBox(
-              height: 1,
-              child: Container(
-                color: Colors.grey,
-              )
-                            
-            ),
             
             const SizedBox(height: 50),
 
             Center(
+              
               child : const Text(
-              'Aliments ajoutés',
+              'Aliments consommés',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 18,
@@ -482,7 +708,16 @@ Future<void> _initializeData() async {
             
             const SizedBox(height: 10),
 
-            SizedBox(
+            Center(
+              child: 
+              Container(
+              width: MediaQuery.of(context).size.width * 0.85, // 90% de la largeur de l’écran,
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+              border: Border.all(color: Color(0x3B000000)),
+              borderRadius: BorderRadius.circular(25),
+              ),
+
               child: _alimentsDuJour.isEmpty
                   ? const Center(
                       child: Text(
@@ -508,32 +743,98 @@ Future<void> _initializeData() async {
                             ' | G. ${macros['glucides']?.toStringAsFixed(0)}',
                             style: const TextStyle(color: Colors.white70),
                           ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.minimize_rounded, color: Colors.red),
+                          
+                          trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit, color: Color(0xFFBC8C56)),
+                              onPressed: () {                                
+                                  
+                                  _modifierAliment(a);
+
+                              },
+                            ),
+                          
+                          
+                          
+                          
+                          IconButton(
+                            icon: Icon(
+                              Icons.close,
+                              color: Colors.red,                            
+                            ),
                             onPressed: () => _supprimerAliment(a),
+                          ),
+                          ]
                           ),
                         );
                       }).toList(),
                     ),
             ),
+            ),
+
+            SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+            
           ],
         ),
-      ),
+        ),
+
+        Positioned(
+            top: 0, // Espace par rapport au haut de l'écran
+            left: 0,
+            right: 0,
+            child: ClipRect( // obligatoire pour BackdropFilter
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  height: topBarH,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  alignment: Alignment.bottomCenter,
+                  color: Colors.black.withAlpha(0), // Couleur semi-transparente
+                  child: const Text(
+                    "Aujourd’hui",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
             ),
+          ),
+
+
+
+          //],
+      //),
+      //),
+            //),
      
-      ),
-      bottomNavigationBar: ClipRRect(
+      //),
+      
+      //BOTTOM BAR
+      Positioned(
+        left: 0, 
+        right: 0,
+        bottom: 0,
+        child: ClipRRect( //bottomNavigationBar:
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(20),
           topRight: Radius.circular(20)
         ),
+
+        child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
       
       child: BottomAppBar(
-        height: 78,
-        color: const Color(0xFF676464),
+        height: 50, //50
+        color: Color(0xFF676464).withAlpha(150), // const Color(0x00676464),
         
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
+          //crossAxisAlignment: CrossAxisAlignment.,
           children: [
             // bouton dashboard
             /*IconButton(
@@ -549,7 +850,8 @@ Future<void> _initializeData() async {
 
             // bouton PROFIL (données utilisateur)
             IconButton(
-              icon: const Icon(Icons.person, color: Colors.white),
+              padding: EdgeInsets.zero,
+              icon: const Icon(Icons.person, color: Colors.black, size: 25),
               onPressed: () async {
                  final result = await Navigator.push(
                   context,
@@ -568,13 +870,25 @@ Future<void> _initializeData() async {
 
             // texte Appli
             Center(
-              child: 
-              const Text(
-                'Cal Track',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
+              child: GestureDetector( 
+                onTap: () {
+                  _ouvrirListeAliments();
+                },
+                child: Container(
+                  width: 25,
+                  height: 25,
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                
+                child: const Center(
+                  child: Icon(
+                    Icons.add, 
+                    color: Color(0xFF066A2D),
+                    size: 25,
+                  ),
+                ),              
                 ),
               ),
             ),
@@ -595,8 +909,10 @@ Future<void> _initializeData() async {
             ),*/
 
             // icône paramètres
-            IconButton(
-              icon: const Icon(Icons.settings, color: Colors.white),
+            Center (
+              child : IconButton(
+                padding: EdgeInsets.zero,
+              icon: const Icon(Icons.settings, color: Colors.black, size: 25),
               onPressed: () {
                 Navigator.push(
                   context,
@@ -604,8 +920,16 @@ Future<void> _initializeData() async {
                   );
               }
             ),
+            ),
           ],
         ),
+      ),
+      ),
+      ),
+            ),
+          ],
+      ),
+      ),
       ),
       ),
     );

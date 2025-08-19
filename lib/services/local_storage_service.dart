@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cal_track_v1/models/user_data.dart';
-import 'package:cal_track_v1/widgets/aliment.dart';
+import 'package:cal_track_v1/models/aliment.dart';
 
 class LocalStorageService {
   static const String _userKey = 'user_data';

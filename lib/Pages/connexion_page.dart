@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 // import 'package:cloud_firestore/cloud_firestore.dart';
 import 'inscription_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class ConnexionPage extends StatefulWidget {
   const ConnexionPage({super.key});
@@ -19,9 +21,22 @@ class ConnexionPage extends StatefulWidget {
 class _ConnexionPageState extends State<ConnexionPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+
+  List<String> _savedEmails = [];
+
   String? _errorMessage;
-
-
+  bool _obscurePassword = true; // état initial
+  
+  Future<void> saveUserDataLocally(UserModel user) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setDouble('Poids', user.poids);
+  await prefs.setDouble('Taille', user.taille);
+  await prefs.setInt('Âge', user.age);
+  await prefs.setString('Sexe', user.sexe);
+  await prefs.setString('NiveauActivité', user.nActivite);
+  await prefs.setString('Sport', user.typeSport);
+  await prefs.setString('Objectif', user.objectif);
+}
 
 
 
@@ -79,6 +94,8 @@ Future<UserModel?> fetchUserData() async {
   @override
   void initState() {
     super.initState();
+    
+    _loadSavedEmails();
 
     // Redirige automatiquement si l'utilisateur est déjà connecté
     if (FirebaseAuth.instance.currentUser != null) {
@@ -102,12 +119,16 @@ Future<UserModel?> fetchUserData() async {
         password: _passwordController.text.trim(),
       );
 
+      await _saveEmail(_emailController.text.trim()); // Sauvegarder l'email
+
       final userData = await fetchUserData();
 
       if (!mounted) return;
       
       if (userData != null) {
+        await saveUserDataLocally(userData); // ⬅️ Ajoutez ceci
       // Passe userData à la page TableauDeBord      
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => TableauDeBord()),
@@ -138,8 +159,28 @@ Future<UserModel?> fetchUserData() async {
     }
   }
 
-final double fieldWidth = 300; 
-static const double gap = 20;
+  Future<void> _loadSavedEmails() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _savedEmails = prefs.getStringList('emails') ?? [];
+    });
+  }
+
+  Future<void> _saveEmail(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!_savedEmails.contains(email)) {
+      _savedEmails.add(email);
+      await prefs.setStringList('emails', _savedEmails);
+    }
+  }
+
+final double fieldWidth = 300;
+final double fieldHeight = 40;
+static const double gap = 15;
+static const double arrondi = 10;
+
+final _emailFocusNode = FocusNode();
+final _passwordFocusNode = FocusNode();
 
   @override
   Widget build(BuildContext context) {
@@ -166,19 +207,45 @@ static const double gap = 20;
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
-                  'Connexion',
+                  'Cal\' Track',
                   style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 
-                const SizedBox(height: gap),
+                const SizedBox(height: 25),
                 
+                //CHAMPS EMAIL
                 Center(                   
                   child : SizedBox( 
                     width: fieldWidth,
-                    child: TextField(
+                    height: fieldHeight,
+                    child: Autocomplete<String>(
+                      optionsBuilder: (TextEditingValue textEditingValue) {
+                        if (textEditingValue.text.isEmpty) {
+                          return _savedEmails;
+                        }
+
+                        return _savedEmails.where((email) => email
+                            .toLowerCase()
+                            .contains(textEditingValue.text.toLowerCase()));
+                      },
+                      fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                        _emailController.text = controller.text;
+                    
+                    return TextField(
+                      textAlignVertical: TextAlignVertical.center,
                   controller: _emailController,
+                  focusNode: _emailFocusNode,
+                  textInputAction: TextInputAction.next,
+                  onEditingComplete: () {
+                    _emailFocusNode.unfocus();          // retire le focus du champ email
+                    FocusScope.of(context).requestFocus(_passwordFocusNode); // focus sur mot de passe
+                  },           
+                                    
                   cursorColor: Color(0xFF357E50), // couleur du curseur
                   decoration: InputDecoration(
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
+                    filled: true,
+                    fillColor: Color(0x0CFFFFFF),
                     labelText: 'Email',
                     labelStyle: const TextStyle(
                       color: Color(0x4CFFFFFF)), // Couleur du label quand le champ est **inactif**
@@ -186,54 +253,142 @@ static const double gap = 20;
                       color: Colors.white, // Couleur du label quand le champ est **focus**
                     ),
                     
-                    prefixIcon: const Icon(Icons.email),
+                    prefixIcon: const Icon(Icons.email, color: Color(0x80000000)),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(arrondi),
                       borderSide: const BorderSide(color: Color(0xFF357E50), width: 2), // couleur personnalisée
                       ),
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(arrondi),
                         borderSide: BorderSide(color: Colors.grey.shade600),
                         ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.circular(arrondi),
                               borderSide: const BorderSide(color: Color(0xFF357E50), width: 2),
                               ),                      
                   ),
                   style: const TextStyle(color: Colors.white), // texte en blanc
-
-                ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
+                    );
+                      },
+                  onSelected: (String selection) {
+                        _emailController.text = selection;
+                      },
+                  
+                  optionsViewBuilder: (context, onSelected, options) {
+                    return ClipRRect(
+                      borderRadius: BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
+                      child: Material(                        
+                          color: Colors.grey[700],
+                                                    
+                        
+                        child: ListView(
+                          padding: EdgeInsets.zero,
+                          shrinkWrap: true,
+                          children: options.map((option) {
+                            return ListTile(
+                              title: Text(option, style: TextStyle(color: Colors.white)),
+                              onTap: () => onSelected(option),
+                            );
+                          }).toList(),
+                      ),
+                      ),                    
+                    );
+                  },
+                    )
+                    )
+                ),                
                 
+
+                const SizedBox(height: gap),
+                
+                //CHAMPS MDP
                 Center( 
                   child: SizedBox( 
                     width: fieldWidth,
+                    height: fieldHeight,
+                    
                     child: TextField(
-                  controller: _passwordController,
-                  cursorColor: Color(0xFF357E50), // couleur du curseur
-                  obscureText: true,
+                      textAlignVertical: TextAlignVertical.center,
+                      controller: _passwordController,
+                      focusNode: _passwordFocusNode,
+                      
+                      onEditingComplete: _signIn,
+
+                      cursorColor: Color(0xFF357E50), // couleur du curseur
+                      obscureText: _obscurePassword, // 👈 lié à ton booléen
+
+                      textInputAction: TextInputAction.done, // <-- permet d’afficher "Entrée/Done"
+                      onSubmitted: (_) => _signIn(),         // <-- déclenche la connexion quand on appuie sur Entrée
+                  
                   decoration: InputDecoration(
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
+                    filled: true,
+                    fillColor: Color(0x0CFFFFFF),
                     labelText: 'Mot de passe',
+                    
                     labelStyle: const TextStyle(
                       color: Color(0x4CFFFFFF), // Couleur du label quand le champ est **inactif**
                     ),
                     floatingLabelStyle: const TextStyle(
                       color: Colors.white, // Couleur du label quand le champ est **focus**
                     ),
-                    prefixIcon: const Icon(Icons.lock),
+                    prefixIcon: const Icon(Icons.lock, color: Color(0x80000000)),
+
+                    // 👇 Ajout de l’icône œil
+                    suffixIcon: Listener(
+                      
+                      onPointerDown: (_) {
+                        setState(() => _obscurePassword = false); // quand on appuie
+                      },
+                      
+                      onPointerUp: (_) {
+                        setState(() => _obscurePassword = true);  // quand on relâche
+                      },
+                      
+                      child: Padding(
+                        padding: EdgeInsets.all(12), // espace autour de l'icône
+                        
+                        child:
+                        _obscurePassword 
+                        
+                        ? ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: fieldHeight * 0.25,                            
+                          ), 
+                          
+                          child: SvgPicture.asset('images/icon-oeil-ouvert.svg',
+                          colorFilter: ColorFilter.mode(Colors.grey,
+                          BlendMode.srcIn,
+                          ),
+                          )
+                        )
+                        
+                        : ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: fieldHeight * 0.5,                            
+                          ), 
+                          
+                          child: SvgPicture.asset('images/icon-oeil-ferme.svg',
+                          colorFilter: ColorFilter.mode(Colors.grey,
+                          BlendMode.srcIn,
+                          ),
+                          )
+                        )
+                      
+                    ),
+                    ),
+                    
+                    
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(arrondi),
                       borderSide: const BorderSide(color: Color(0xFF357E50), width: 2), // couleur personnalisée                    
                     ),
                     enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(arrondi),
                         borderSide: BorderSide(color: Colors.grey.shade600),
                     ),
                     focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(arrondi),
                         borderSide: const BorderSide(color: Color(0xFF357E50), width: 2),
                     ),
                   ),
@@ -242,7 +397,7 @@ static const double gap = 20;
                   ),
                 ),
                 
-                const SizedBox(height: 24),
+                const SizedBox(height: gap),
                 
                 if (_errorMessage != null)
                   Padding(
@@ -252,16 +407,21 @@ static const double gap = 20;
                       style: const TextStyle(color: Colors.red),
                     ),
                   ),
+    
                 
                 // SE CONNECTER
                 Center( 
                   child : SizedBox( 
+                    width: fieldWidth,
+                    height: fieldHeight,
                   child : ElevatedButton(
+                  
                   onPressed: _signIn,
+                  
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
                     backgroundColor: Color(0xFF357E50),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(arrondi)),
                   ),
                   child: const Text(
                     'Se connecter',
@@ -271,33 +431,70 @@ static const double gap = 20;
                   ),
                 ),
                 
-                const SizedBox(height: 12),
-                
-                // PAS ENCORE DE COMPTE
+                const SizedBox(height: 25),
+
+                //OU
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    //const Text("Pas encore de compte ?"),
                     
-                    TextButton(
+                    Expanded(
+                      child: 
+                    Container(
+                      height: 1, // épaisseur de la ligne
+                      color: Colors.white,
+                    ),
+                    ),
+                    
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      child:  Text('ou', style: TextStyle(color: Color(0xFF828282)),
+                    ),
+                    ),
+                    
+                    Expanded(
+                      child: Container(
+                      height: 1, // épaisseur de la ligne
+                      color: Colors.white,
+                    ),
+                    ),
+
+                  ]
+                ),
+                
+                const SizedBox(height: 25),
+
+                // PAS ENCORE DE COMPTE
+                Center(                  
+                  child: SizedBox(
+                    width: fieldWidth,
+                    height: fieldHeight,
+                    
+                    child: 
+                    //const Text("Pas encore de compte ?"),                    
+                    ElevatedButton(
                       onPressed: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => const InscriptionPage()),
                         );
                       },
-                      style: TextButton.styleFrom(
-                        textStyle: const TextStyle(),
-                        splashFactory: NoSplash.splashFactory,
-                        overlayColor: Colors.transparent
-                        ),
-                    child: const Text("Créer un compte",
-                    style: TextStyle(color: Colors.white)
+                      
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                        backgroundColor: (Colors.black),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(arrondi)),
+                      
+                      ),                        
+                      
+                      child: const Text("Créer votre compte",
+                      style: TextStyle(color: Colors.white)
                     
                     ),
                      
                     ),
-                  ],
+                  
+                ),
                 ),
                   
                 
