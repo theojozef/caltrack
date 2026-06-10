@@ -38,7 +38,7 @@ const RESOURCES = {"assets/AssetManifest.bin": "ba00f08bb10fd64c78121b21093f9e60
 "canvaskit/skwasm.wasm": "39dd80367a4e71582d234948adc521c0",
 "favicon.png": "5dcef449791fa27946b3d35ad8803796",
 "flutter.js": "83d881c1dbb6d6bcd6b42e274605b69c",
-"flutter_bootstrap.js": "82b8f061233bc8d48b1728d99556503c",
+"flutter_bootstrap.js": "053490ea8da71ca55dfb70718592f7aa",
 "icon-caltrack-32.png": "bd5def2552a9229938514d71195c4bc9",
 "icons/Icon-192.png": "ac9a721a12bbc803b44f645561ecb1e1",
 "icons/Icon-512.png": "96e752610906ba2a93c65f8abe1645f1",

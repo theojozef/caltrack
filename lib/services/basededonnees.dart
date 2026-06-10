@@ -23,8 +23,8 @@ Future<List<Aliment>> chargerAlimentsDepuisCSV() async {
         proteines: double.tryParse(row[protIndex].toString().replaceAll(',', '.')) ?? 0,
         glucides: double.tryParse(row[glucIndex].toString().replaceAll(',', '.')) ?? 0,
         lipides: double.tryParse(row[lipIndex].toString().replaceAll(',', '.')) ?? 0,
-        fibres: double.tryParse(row[lipIndex].toString().replaceAll(',', '.')) ?? 0,
-        sucresLibres: double.tryParse(row[lipIndex].toString().replaceAll(',', '.')) ?? 0,
+        fibres: 0, // ciqual4.csv n'a pas de colonne fibres
+        sucresLibres: 0, // ciqual4.csv n'a pas de colonne sucres
       );
     } catch (e) {
       return null;

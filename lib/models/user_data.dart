@@ -28,15 +28,15 @@ class UserModel {
   };
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
-  
-  return UserModel(
-    sexe: json['Sexe'] ?? 'homme', // ?? 'homme',
-    poids: (json['Poids'] ?? 72 ).toDouble(), // ?? 72
-    taille: (json['Taille'] ?? 180).toDouble(), // ?? 180
-    age: json['Âge'] ?? 25, // ?? 25,
-    nActivite: json['Niveau d\'activité physique'] ?? 'actif', // ?? 'actif',
-    typeSport: json['Type d\'activité physique'] ?? 'loisir', // ?? 'force',
-    objectif: json['Objectif'] ?? 'maintien', // ?? 'pdm',
-  );
+    // Clés minuscules = cache local (toJson), clés majuscules = Firestore
+    return UserModel(
+      sexe: json['sexe'] ?? json['Sexe'] ?? 'homme',
+      poids: ((json['poids'] ?? json['Poids'] ?? 72) as num).toDouble(),
+      taille: ((json['taille'] ?? json['Taille'] ?? 180) as num).toDouble(),
+      age: (json['age'] ?? json['Âge'] ?? 25) as int,
+      nActivite: json['nActivite'] ?? json['Niveau d\'activité physique'] ?? 'actif',
+      typeSport: json['typeSport'] ?? json['Type d\'activité physique'] ?? 'endurance',
+      objectif: json['objectif'] ?? json['Objectif'] ?? 'maintien',
+    );
   }
 }

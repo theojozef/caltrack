@@ -1,11 +1,14 @@
 import 'dart:ui';
+import 'package:cal_track_v1/Pages/connexion_page.dart';
 import 'package:cal_track_v1/Pages/deconnexion.dart';
 import 'package:cal_track_v1/Pages/donnees_utilisateur.dart';
+import 'package:cal_track_v1/Pages/stats_page.dart';
 import 'package:cal_track_v1/Pages/liste_aliments_page.dart';
 import 'package:cal_track_v1/models/user_data.dart';
 import 'package:cal_track_v1/services/formules_calories.dart';
 import 'package:cal_track_v1/services/local_storage_service.dart';
 import 'package:cal_track_v1/models/aliment.dart';
+import 'package:cal_track_v1/widgets/calendrier_panel.dart';
 import 'package:cal_track_v1/widgets/quantite_aliment.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -37,31 +40,41 @@ class _TableauDeBordState extends State<TableauDeBord> {
   late double glucidesMax;
   late double caloriesMin;
   late double caloriesMax;
-  // late double fibresMin;
-  // late double fibresMax;
-  
+  late double fibresMin;
+  late double fibresMax;
+
   double compteurkcal = 0;
   double compteurProteines = 0;
   double compteurLipides = 0;
   double compteurGlucides = 0;
-  // double compteurFibres = 0;
+  double compteurFibres = 0;
   // double compteurSucresLibres = 0;
 
   UserModel? _userData;
-  
+
+  DateTime _dateSelectionnee = DateTime.now(); // jour affiché (today par défaut)
+  Set<String> _joursAvecDonnees = {};          // dates avec au moins un aliment
+
   DateTime? _derniereDateMaj;
 
-  final List<AlimentConsomme> _alimentsDuJour = [];  
+  final List<AlimentConsomme> _alimentsDuJour = [];
+
+  // true = liste visible, false = rétractée (ouvert par défaut)
+  final Map<String, bool> _repasExpanded = {
+    for (final r in Repas.values) r.name: true,
+  };
 
   bool _isLoading = false;
 
-  
+  // Date du jour affiché (peut être un jour passé)
+  String get _dateCourante => LocalStorageService.formatDate(_dateSelectionnee);
+  // Vrai uniquement si on consulte la journée en cours
+  bool get _estAujourdhui =>
+      _dateCourante == LocalStorageService.formatDate(DateTime.now());
 
   @override
   void initState() {
     super.initState();
-
-    
 
     _initializeData();
   }
@@ -70,31 +83,30 @@ Future<void> _initializeData() async {
   
   final userId = FirebaseAuth.instance.currentUser?.uid;
   
-  /* if (FirebaseAuth.instance.currentUser != null) {
-      
-      Future.microtask(() {
-        if (!mounted) return;
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => ConnexionPage()),
-        );
-      });
-    } */
+  // Si pas d'utilisateur connecté, retourner à la page de connexion
+  if (userId == null) {
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const ConnexionPage()),
+    );
+    return;
+  }
 
   setState(() { _isLoading = true; });
 
 
   // ÉRAPE 1 : Charger données locales
   
-  final localUser = await LocalStorageService.loadUserData(userId!);
+  final localUser = await LocalStorageService.loadUserData(userId);
   final localMacros = await LocalStorageService.loadMacros(userId);
-  final aliments = await LocalStorageService.loadAlimentsDuJour(userId);
+  final aliments = await LocalStorageService.loadAlimentsDuJour(userId, _dateCourante);
 
   if (localUser != null) {
     _userData = localUser;
     _mettreAJourDonneesUtilisateur(localUser);
   }
+
 
   if (localMacros != null) {
     caloriesMin = localMacros['calories_min']!.toDouble();
@@ -105,22 +117,47 @@ Future<void> _initializeData() async {
     lipidesMax = localMacros['lipides_max']!.toDouble();
     glucidesMin = localMacros['glucides_min']!.toDouble();
     glucidesMax = localMacros['glucides_max']!.toDouble();
-    // fibresMin = localMacros['fibres_min']!.toDouble();
-    // fibresMax = localMacros['fibres_max']!.toDouble();
-  }
+    fibresMin = localMacros['fibres_min']!.toDouble();
+    fibresMax = localMacros['fibres_max']!.toDouble();
+  } else {
+      // 2) Si pas de macros locales, tenter de récupérer depuis Firebase
+      final fetched = await fetchUserData(); // <-- votre méthode existante
+      if (fetched != null) {
+        _userData = fetched;
+        _mettreAJourDonneesUtilisateur(fetched);
+      } else {
+        // Pas de données en base : forcer la déconnexion et retourner à la connexion
+        if (!mounted) return;
+        await FirebaseAuth.instance.signOut();
+        Navigator.pushReplacement(
+          // ignore: use_build_context_synchronously
+          context,
+          MaterialPageRoute(builder: (_) => const ConnexionPage()),
+        );
+        return;
+      }
+    }
 
-  if (localMacros == null) {_mettreAJourDepuisFirebase(userId);}
+  // if (localMacros == null) {_mettreAJourDepuisFirebase(userId);}
 
-  _chargerAlimentsEtCompteurs(aliments); //!! AJOUTER FONCTION ??
+  await _chargerAlimentsEtCompteurs(aliments); //!! AJOUTER FONCTION ??
+
+  // Initialiser _derniereDateMaj AVANT la vérification pour ne pas effacer
+  // les aliments qu'on vient de charger (sinon la condition "null" déclencherait toujours le clear)
+  final maintenant = DateTime.now();
+  _derniereDateMaj = DateTime(maintenant.year, maintenant.month, maintenant.day);
 
   // ÉTAPE 2 : Vérifier changement de jour
-  
+
   await _verifierEtReinitialiserAliments();
   
   setState(() => _isLoading = false);
 
   // ÉTAPE 3 : Mise à jour Firebase (asynchrone, ne bloque pas l'UI)
-  //_mettreAJourDepuisFirebase(userId);
+  _mettreAJourDepuisFirebase(userId);
+
+  // Charger les jours avec données pour le calendrier
+  _chargerJoursAvecDonnees(userId);
 }
   
   // Charger données Firebase (prioritaire)
@@ -150,7 +187,7 @@ Future<void> _initializeData() async {
     compteurProteines = 0;
     compteurLipides = 0;
     compteurGlucides = 0;
-    // compteurFibres = 0;
+    compteurFibres = 0;
     // compteurSucresLibres = 0;
 
     for (var aliment in aliments) {
@@ -159,7 +196,7 @@ Future<void> _initializeData() async {
       compteurProteines += macros['proteines'] ?? 0;
       compteurLipides += macros['lipides'] ?? 0;
       compteurGlucides += macros['glucides'] ?? 0;
-      // compteurFibres += macros['fibres'] ?? 0;
+      compteurFibres += macros['fibres'] ?? 0;
       // compteurSucresLibres += macros['sucres'] ?? 0;
 
     }
@@ -223,8 +260,8 @@ Future<void> _initializeData() async {
     lipidesMax = macros['lipides_max']!.toDouble();
     glucidesMin = macros['glucides_min']!.toDouble();
     glucidesMax = macros['glucides_max']!.toDouble();
-    // fibresMin = macros['fibres_min']!.toDouble();
-    // fibresMax = macros['fibres_max']!.toDouble();
+    fibresMin = macros['fibres_min']!.toDouble();
+    fibresMax = macros['fibres_max']!.toDouble();
   });
 
     final userId = FirebaseAuth.instance.currentUser?.uid;
@@ -235,6 +272,9 @@ Future<void> _initializeData() async {
 
 // Vérifier si les aliments du jour doivent être réinitialisés (nouvelle journée)
   Future<void> _verifierEtReinitialiserAliments() async {
+  // Pas de réinitialisation si on consulte un jour passé
+  if (!_estAujourdhui) return;
+
   final userId = FirebaseAuth.instance.currentUser?.uid ?? "offline_user";
     
   final maintenant = DateTime.now();
@@ -250,89 +290,108 @@ Future<void> _initializeData() async {
       compteurProteines = 0;
       compteurLipides = 0;
       compteurGlucides = 0;
-      // compteurFibres = 0;
+      compteurFibres = 0;
       // compteurSucresLibres = 0;
-      
+
       _derniereDateMaj = aujourdHui;
     });
     
   // Sauvegarder liste vide uniquement après avoir confirmé nouvelle journée
-  await LocalStorageService.saveAlimentsDuJour(userId, _alimentsDuJour);
+  await LocalStorageService.saveAlimentsDuJour(userId, _alimentsDuJour, _dateCourante);
 
     }
   }
 
-  void _ouvrirListeAliments() {
+  // repas est optionnel : fourni par le bouton + d’une section, null si ajout général
+  void _ouvrirListeAliments([Repas? repas]) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => ListeAlimentsPage(
-          onAlimentAjoute: (Aliment aliment, double quantite, Portion portionChoisie) {
-          
-          // Convertir la quantité en grammes
-          double quantiteEnGrammes;
-          if (portionChoisie.nom == "g") {
-            quantiteEnGrammes = quantite; // déjà en grammes
-          } else {
-            quantiteEnGrammes = quantite * portionChoisie.poids;
-          }            
-        
-        // Gère ici l’ajout avec la bonne quantité
-        _ajouterAliment(aliment, 
-                        quantiteEnGrammes, 
-                        aliment.getMacrosPourQuantite(quantiteEnGrammes));
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 320),
+        reverseTransitionDuration: const Duration(milliseconds: 280),
+        pageBuilder: (context, animation, secondaryAnimation) => ListeAlimentsPage(
+          repasPreselectionne: repas,
+          onAlimentAjoute: (Aliment aliment, double quantite, Portion portionChoisie, Repas? repasChoisi) {
+
+            // Convertir la quantité en grammes
+            double quantiteEnGrammes;
+            if (portionChoisie.nom == "g") {
+              quantiteEnGrammes = quantite;
+            } else {
+              quantiteEnGrammes = quantite * portionChoisie.poids;
+            }
+
+            _ajouterAliment(aliment,
+                            quantiteEnGrammes,
+                            aliment.getMacrosPourQuantite(quantiteEnGrammes),
+                            repasChoisi);
           },
-          ),
+        ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 1),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+            child: child,
+          );
+        },
       ),
     );
   }
 
-  void _ajouterAliment(Aliment aliment, double quantite, Map<String, double> macros) async {
+  void _ajouterAliment(Aliment aliment, double quantite, Map<String, double> macros, [Repas? repas]) async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return;
-    
+
     setState(() {
 
       // ✅ Marquer l’aliment comme déjà ajouté
       aliment.dejaAjoute = true;
 
-      // Ajouter à la liste du jour
-      _alimentsDuJour.add(AlimentConsomme(aliment, quantite));      
+      // Ajouter à la liste du jour avec le repas sélectionné
+      _alimentsDuJour.add(AlimentConsomme(aliment, quantite, repas: repas));
       
       // Mise à jour des compteurs
       compteurkcal += macros['calories'] ?? 0;
       compteurProteines += macros['proteines'] ?? 0;
       compteurGlucides += macros['glucides'] ?? 0;
       compteurLipides += macros['lipides'] ?? 0;
-      // compteurFibres += macros['fibres'] ?? 0;
+      compteurFibres += macros['fibres'] ?? 0;
       // compteurSucresLibres += macros['sucres'] ?? 0;
       
     });
 
-    await LocalStorageService.saveAlimentsDuJour(userId, _alimentsDuJour);
+    await LocalStorageService.saveAlimentsDuJour(userId, _alimentsDuJour, _dateCourante);
   }
 
-  void _supprimerAliment(AlimentConsomme alimentConsomme) {
+  void _supprimerAliment(AlimentConsomme alimentConsomme) async {
     setState(() {
       _alimentsDuJour.remove(alimentConsomme);
 
       final macros = alimentConsomme.aliment.getMacrosPourQuantite(alimentConsomme.quantite);
-      
+
       compteurkcal -= macros['calories'] ?? 0;
       compteurProteines -= macros['proteines'] ?? 0;
       compteurGlucides -= macros['glucides'] ?? 0;
       compteurLipides -= macros['lipides'] ?? 0;
-      // compteurFibres -= macros['fibres'] ?? 0;
+      compteurFibres -= macros['fibres'] ?? 0;
       // compteurSucresLibres -= macros['sucres'] ?? 0;
-     
+
       // Empêche des valeurs négatives dues aux arrondis
       compteurkcal = compteurkcal.clamp(0, double.infinity);
       compteurProteines = compteurProteines.clamp(0, double.infinity);
       compteurGlucides = compteurGlucides.clamp(0, double.infinity);
-      compteurLipides = compteurLipides.clamp(0, double.infinity); 
-      // compteurFibres = compteurFibres.clamp(0, double.infinity);
-      // compteurSucresLibres = compteurSucresLibres.clamp(0, double.infinity);   
-  });
+      compteurLipides = compteurLipides.clamp(0, double.infinity);
+      compteurFibres = compteurFibres.clamp(0, double.infinity);
+      // compteurSucresLibres = compteurSucresLibres.clamp(0, double.infinity);
+    });
+
+    // Sauvegarde après suppression (manquait avant)
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId != null) {
+      await LocalStorageService.saveAlimentsDuJour(userId, _alimentsDuJour, _dateCourante);
+    }
   }
   
   void _modifierAliment(AlimentConsomme alimentConsomme) async {
@@ -374,16 +433,34 @@ Future<void> _initializeData() async {
       compteurProteines = compteurProteines - (oldMacros['proteines'] ?? 0) + (newMacros['proteines'] ?? 0);
       compteurGlucides = compteurGlucides - (oldMacros['glucides'] ?? 0) + (newMacros['glucides'] ?? 0);
       compteurLipides = compteurLipides - (oldMacros['lipides'] ?? 0) + (newMacros['lipides'] ?? 0);
-      // compteurFibres = compteurFibres - (oldMacros['fibres'] ?? 0) + (newMacros['fibres'] ?? 0);
+      compteurFibres = (compteurFibres - (oldMacros['fibres'] ?? 0) + (newMacros['fibres'] ?? 0)).clamp(0, double.infinity);
       // compteurLipides = compteurLipides - (oldMacros['sucres'] ?? 0) + (newMacros['sucres'] ?? 0);
     });
 
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId != null) {
-      await LocalStorageService.saveAlimentsDuJour(userId, _alimentsDuJour);
+      await LocalStorageService.saveAlimentsDuJour(userId, _alimentsDuJour, _dateCourante);
     }
   }
 }
+
+  void _mettreAJourQuantite(AlimentConsomme alimentConsomme, double nouvelleQuantite) async {
+    final oldMacros = alimentConsomme.aliment.getMacrosPourQuantite(alimentConsomme.quantite);
+    final newMacros = alimentConsomme.aliment.getMacrosPourQuantite(nouvelleQuantite);
+
+    setState(() {
+      alimentConsomme.quantite = nouvelleQuantite;
+      compteurkcal      = (compteurkcal      - (oldMacros['calories']  ?? 0) + (newMacros['calories']  ?? 0)).clamp(0, double.infinity);
+      compteurProteines = (compteurProteines - (oldMacros['proteines'] ?? 0) + (newMacros['proteines'] ?? 0)).clamp(0, double.infinity);
+      compteurGlucides  = (compteurGlucides  - (oldMacros['glucides']  ?? 0) + (newMacros['glucides']  ?? 0)).clamp(0, double.infinity);
+      compteurLipides   = (compteurLipides   - (oldMacros['lipides']   ?? 0) + (newMacros['lipides']   ?? 0)).clamp(0, double.infinity);
+    });
+
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId != null) {
+      await LocalStorageService.saveAlimentsDuJour(userId, _alimentsDuJour, _dateCourante);
+    }
+  }
 
   int _arrondir100(double valeur) {
   return (valeur / 100).round() * 100;
@@ -412,8 +489,8 @@ Future<void> _initializeData() async {
       lipidesMax = nouvellesMacros['lipides_max']!.toDouble();
       glucidesMin = nouvellesMacros['glucides_min']!.toDouble();
       glucidesMax = nouvellesMacros['glucides_max']!.toDouble();
-      // fibresMin = nouvellesMacros['fibres_min']!.toDouble();
-      // fibresMax = nouvellesMacros['fibres_max']!.toDouble();
+      fibresMin = nouvellesMacros['fibres_min']!.toDouble();
+      fibresMax = nouvellesMacros['fibres_max']!.toDouble();
 
     }
 
@@ -431,8 +508,8 @@ Future<void> _initializeData() async {
       'lipides_max': lipidesMax.round(),
       'glucides_min': glucidesMin.round(),
       'glucides_max': glucidesMax.round(),
-      // 'fibres_min': fibresMin.round(),
-      // 'fibres_max': fibresMax.round(),
+      'fibres_min': fibresMin.round(),
+      'fibres_max': fibresMax.round(),
     });
   }
   }
@@ -461,8 +538,8 @@ Future<void> _initializeData() async {
       lipidesMax = nouvellesMacros['lipides_max']!.toDouble();
       glucidesMin = nouvellesMacros['glucides_min']!.toDouble();
       glucidesMax = nouvellesMacros['glucides_max']!.toDouble();
-      // fibresMin = nouvellesMacros['fibres_min']!.toDouble();
-      // fibresMax = nouvellesMacros['fibres_max']!.toDouble();
+      fibresMin = nouvellesMacros['fibres_min']!.toDouble();
+      fibresMax = nouvellesMacros['fibres_max']!.toDouble();
     }
     
   });
@@ -479,8 +556,8 @@ Future<void> _initializeData() async {
       'lipides_max': lipidesMax.round(),
       'glucides_min': glucidesMin.round(),
       'glucides_max': glucidesMax.round(),
-      // 'fibres_min': fibresMin.round(),
-      // 'fibres_max': fibresMax.round(),
+      'fibres_min': fibresMin.round(),
+      'fibres_max': fibresMax.round(),
     });
   }
   }
@@ -492,6 +569,218 @@ Future<void> _initializeData() async {
   static const double separatorWidth = ((0.5*dashbarWidth) - ajustBoutonWidth) ;
   static const double topBarH = 85;
   static const double ajustBoutonWidth = 50;
+
+  // ── Calendrier & navigation par date ────────────────────────────────────
+
+  Future<void> _chargerJoursAvecDonnees(String userId) async {
+    final dates = await LocalStorageService.getJoursAvecDonnees(userId);
+    if (mounted) setState(() => _joursAvecDonnees = dates.toSet());
+  }
+
+  // Recharge les aliments pour la date sélectionnée (sans toucher aux macros/profil)
+  Future<void> _chargerDonneesPourDate() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
+
+    setState(() => _isLoading = true);
+
+    final aliments = await LocalStorageService.loadAlimentsDuJour(userId, _dateCourante);
+    await _chargerAlimentsEtCompteurs(aliments);
+
+    if (_estAujourdhui) {
+      final now = DateTime.now();
+      _derniereDateMaj = DateTime(now.year, now.month, now.day);
+      await _verifierEtReinitialiserAliments();
+    }
+
+    setState(() => _isLoading = false);
+  }
+
+  void _selectionnerDate(DateTime date) {
+    setState(() => _dateSelectionnee = date);
+    _chargerDonneesPourDate();
+  }
+
+  // "Mar. 3 juin" pour les jours passés dans la top bar
+  String _formatDateCourte(DateTime date) {
+    const jours = ['Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.', 'Dim.'];
+    const mois = ['jan.', 'fév.', 'mars', 'avr.', 'mai', 'juin',
+                  'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+    return '${jours[date.weekday - 1]} ${date.day} ${mois[date.month - 1]}';
+  }
+
+  void _ouvrirCalendrier() async {
+    // Recharger la liste fraîche avant d'ouvrir
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId != null) {
+      final dates = await LocalStorageService.getJoursAvecDonnees(userId);
+      if (mounted) setState(() => _joursAvecDonnees = dates.toSet());
+    }
+    if (!mounted) return;
+
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 280),
+      pageBuilder: (ctx, _, __) => Align(
+        alignment: Alignment.topCenter,
+        child: Material(
+          color: Colors.transparent,
+          child: SafeArea(
+            child: CalendrierPanel(
+              dateSelectionnee: _dateSelectionnee,
+              joursAvecDonnees: _joursAvecDonnees,
+              onDateSelectionnee: _selectionnerDate,
+            ),
+          ),
+        ),
+      ),
+      transitionBuilder: (ctx, anim, _, child) => SlideTransition(
+        position: Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
+            .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+        child: child,
+      ),
+    );
+  }
+
+  // ── Helpers liste aliments ──────────────────────────────────────────────
+
+  // Une boîte par repas, toujours visibles
+  List<Widget> _buildGroupedList() {
+    final cards = <Widget>[
+      for (final repas in Repas.values) _buildRepasCard(repas),
+    ];
+
+    // Boîte "Non catégorisé" uniquement s'il y a des aliments sans repas
+    final sansCategorie = _alimentsDuJour.where((a) => a.repas == null).toList();
+    if (sansCategorie.isNotEmpty) {
+      cards.add(_buildRepasCardGenerique('Non catégorisé', sansCategorie));
+    }
+
+    return cards;
+  }
+
+  Widget _buildRepasCard(Repas repas) {
+    final groupe = _alimentsDuJour.where((a) => a.repas == repas).toList();
+    return _buildRepasCardGenerique(repas.label, groupe, repas: repas);
+  }
+
+  Widget _buildRepasCardGenerique(String label, List<AlimentConsomme> aliments, {Repas? repas}) {
+    final totalKcal = aliments.fold<double>(
+      0,
+      (acc, a) => acc + (a.aliment.getMacrosPourQuantite(a.quantite)['calories'] ?? 0),
+    );
+
+    // La clé dans _repasExpanded : nom de l'enum pour les repas, label sinon
+    final expandedKey = repas?.name ?? label;
+    final ouvert = _repasExpanded[expandedKey] ?? true;
+
+    return Container(
+      width: MediaQuery.of(context).size.width * 0.85,
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: const Color(0xFF4A4A4A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withAlpha(25), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // En-tête : chevron + nom/kcal + bouton +
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+            child: Row(
+              children: [
+                // Chevron rotatif dans une zone carrée fixe
+                GestureDetector(
+                  onTap: () => setState(() => _repasExpanded[expandedKey] = !ouvert),
+                  child: SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: Center(
+                      child: AnimatedRotation(
+                        turns: ouvert ? 0.25 : 0.0,
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeInOut,
+                        child: const Icon(
+                          Icons.chevron_right,
+                          color: Colors.white70,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    Text(
+                      '${totalKcal.toStringAsFixed(0)} kcal',
+                      style: const TextStyle(
+                        color: Color(0xFF9E9E9E),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                if (repas != null)
+                  GestureDetector(
+                    onTap: () => _ouvrirListeAliments(repas),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF357E50),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.add, color: Colors.white, size: 18),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          // Aliments de ce repas (animés)
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeInOut,
+            child: ouvert && aliments.isNotEmpty
+                ? Column(
+                    children: [
+                      const Divider(color: Color(0x18FFFFFF), height: 1),
+                      ...aliments.map(_buildAlimentTile),
+                    ],
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAlimentTile(AlimentConsomme a) {
+    return _SwipeableAlimentTile(
+      key: ObjectKey(a),
+      alimentConsomme: a,
+      onDelete: () => _supprimerAliment(a),
+      onModify: () => _modifierAliment(a),
+      onUpdateQuantite: (q) => _mettreAJourQuantite(a, q),
+    );
+  }
 
   // UI
   @override
@@ -650,49 +939,45 @@ Future<void> _initializeData() async {
               barWidth: dashbarWidth,
             ),
             
-            // const SizedBox(height: gap),
+            const SizedBox(height: gap),
 
-            /* //BARRE FIBRE
             GroupeBarre(
               titre: "Fibres",
               valeurMin: fibresMin,
               valeurMax: fibresMax,
               compteurCalories: compteurFibres,
               barWidth: dashbarWidth,
-            ), */
-
-            const SizedBox(height: gap),
-
-            Center(
-              child : SizedBox(
-              width: 50,
-              height: 50,
-              child: ElevatedButton(
-                
-                onPressed: _ouvrirListeAliments,
-
-              style: ElevatedButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15), // optionnel : coins arrondis
-                  ),
-                  backgroundColor: Color(0xFF357E50), // couleur de fond optionnelle
-                  // elevation: 4, // ombre optionnelle
-                  padding: EdgeInsets.zero, // Important : enlève le padding interne
-                  ),
-                  child: const Center(
-                  child: Icon(
-                    Icons.add,
-                    color: Colors.black, // couleur personnalisée de l'icône
-                    size: 40, // 30 taille de l'icône
-                    ),
             ),
-              ),
-            ),
-            ),
+
+            // const SizedBox(height: gap),
+
+            // Center(
+            //   child : SizedBox(
+            //   width: 50,
+            //   height: 50,
+            //   child: ElevatedButton(
+            //     onPressed: _ouvrirListeAliments,
+            //     style: ElevatedButton.styleFrom(
+            //       shape: RoundedRectangleBorder(
+            //         borderRadius: BorderRadius.circular(15), // optionnel : coins arrondis
+            //       ),
+            //       backgroundColor: Color(0xFF357E50), // couleur de fond optionnelle
+            //       // elevation: 4, // ombre optionnelle
+            //       padding: EdgeInsets.zero,
+            //     ),
+            //     child: const Center(
+            //       child: Icon(
+            //         Icons.add,
+            //         color: Colors.black,
+            //         size: 40,
+            //       ),
+            //     ),
+            //   ),
+            // ),
 
             const SizedBox(height: gap),
             
-            const SizedBox(height: 50),
+            // const SizedBox(height: 50),
 
             Center(
               
@@ -708,70 +993,11 @@ Future<void> _initializeData() async {
             
             const SizedBox(height: 10),
 
+            // Chaque repas a sa propre boîte (cf. _buildGroupedList)
             Center(
-              child: 
-              Container(
-              width: MediaQuery.of(context).size.width * 0.85, // 90% de la largeur de l’écran,
-            decoration: BoxDecoration(
-              color: Colors.transparent,
-              border: Border.all(color: Color(0x3B000000)),
-              borderRadius: BorderRadius.circular(25),
+              child: Column(
+                children: _buildGroupedList(),
               ),
-
-              child: _alimentsDuJour.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'Aucun aliment ajouté.',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    )
-                  : Column( //ListView
-                      children: _alimentsDuJour.map((a) {
-                        //final index = entry.key;
-                        //final aliment = entry.value;
-                        final macros = a.aliment.getMacrosPourQuantite(a.quantite);
-
-                        return ListTile(
-                          title: Text(
-                            "${a.aliment.nom} - ${a.quantite.toStringAsFixed(0)}g",
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                          subtitle: Text(
-                            '${macros['calories']?.toStringAsFixed(0)} kcal - '
-                            'P. ${macros['proteines']?.toStringAsFixed(0)}' 
-                            ' | L. ${macros['lipides']?.toStringAsFixed(0)}' 
-                            ' | G. ${macros['glucides']?.toStringAsFixed(0)}',
-                            style: const TextStyle(color: Colors.white70),
-                          ),
-                          
-                          trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit, color: Color(0xFFBC8C56)),
-                              onPressed: () {                                
-                                  
-                                  _modifierAliment(a);
-
-                              },
-                            ),
-                          
-                          
-                          
-                          
-                          IconButton(
-                            icon: Icon(
-                              Icons.close,
-                              color: Colors.red,                            
-                            ),
-                            onPressed: () => _supprimerAliment(a),
-                          ),
-                          ]
-                          ),
-                        );
-                      }).toList(),
-                    ),
-            ),
             ),
 
             SizedBox(height: MediaQuery.of(context).size.height * 0.15),
@@ -791,14 +1017,43 @@ Future<void> _initializeData() async {
                   height: topBarH,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   alignment: Alignment.bottomCenter,
-                  color: Colors.black.withAlpha(0), // Couleur semi-transparente
-                  child: const Text(
-                    "Aujourd’hui",
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
+                  color: Colors.black.withAlpha(0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Flèche jour précédent
+                      IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        icon: const Icon(Icons.chevron_left, color: Colors.white, size: 22),
+                        onPressed: () => _selectionnerDate(
+                          _dateSelectionnee.subtract(const Duration(days: 1))),
+                      ),
+                      const SizedBox(width: 16),
+                      // Date — tap pour ouvrir le calendrier
+                      GestureDetector(
+                        onTap: _ouvrirCalendrier,
+                        child: Text(
+                          _estAujourdhui
+                              ? "Aujourd’hui"
+                              : _formatDateCourte(_dateSelectionnee),
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      // Flèche jour suivant (grisée si aujourd’hui)
+                      IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        icon: Icon(Icons.chevron_right,
+                            color: _estAujourdhui ? Colors.white24 : Colors.white, size: 22),
+                        onPressed: _estAujourdhui
+                            ? null
+                            : () => _selectionnerDate(
+                                _dateSelectionnee.add(const Duration(days: 1))),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -827,10 +1082,10 @@ Future<void> _initializeData() async {
 
         child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-      
+
       child: BottomAppBar(
         height: 50, //50
-        color: Color(0xFF676464).withAlpha(150), // const Color(0x00676464),
+        color: Color(0xFF676464).withAlpha(150),
         
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -851,7 +1106,7 @@ Future<void> _initializeData() async {
             // bouton PROFIL (données utilisateur)
             IconButton(
               padding: EdgeInsets.zero,
-              icon: const Icon(Icons.person, color: Colors.black, size: 25),
+              icon: const Icon(Icons.person, color: Colors.white, size: 25),
               onPressed: () async {
                  final result = await Navigator.push(
                   context,
@@ -908,11 +1163,35 @@ Future<void> _initializeData() async {
               ),
             ),*/
 
+            // bouton STATS — 3 barres dessinées (icône Material invisible sur ce renderer)
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const StatsPage()),
+              ),
+              child: SizedBox(
+                width: 48, height: 48,
+                child: Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Container(width: 5, height: 10, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(2))),
+                      const SizedBox(width: 3),
+                      Container(width: 5, height: 18, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(2))),
+                      const SizedBox(width: 3),
+                      Container(width: 5, height: 13, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(2))),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
             // icône paramètres
             Center (
               child : IconButton(
                 padding: EdgeInsets.zero,
-              icon: const Icon(Icons.settings, color: Colors.black, size: 25),
+              icon: const Icon(Icons.settings, color: Colors.white, size: 25),
               onPressed: () {
                 Navigator.push(
                   context,
@@ -942,3 +1221,160 @@ Future<void> _initializeData() async {
 
   AlimentConsomme(this.aliment, this.quantite);
 }*/
+
+// ── Tuile d'aliment avec swipe gauche pour révéler le bouton de suppression ──
+
+class _SwipeableAlimentTile extends StatefulWidget {
+  final AlimentConsomme alimentConsomme;
+  final VoidCallback onDelete;
+  final VoidCallback onModify;
+  final Function(double) onUpdateQuantite;
+
+  const _SwipeableAlimentTile({
+    super.key,
+    required this.alimentConsomme,
+    required this.onDelete,
+    required this.onModify,
+    required this.onUpdateQuantite,
+  });
+
+  @override
+  State<_SwipeableAlimentTile> createState() => _SwipeableAlimentTileState();
+}
+
+class _SwipeableAlimentTileState extends State<_SwipeableAlimentTile>
+    with SingleTickerProviderStateMixin {
+  static const double _revealWidth = 64.0;
+
+  late final AnimationController _ctrl;
+  late Animation<double> _anim;
+  double _offset = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+    );
+    _anim = Tween<double>(begin: 0, end: 0).animate(_ctrl);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _snapTo(double target) {
+    _anim = Tween<double>(begin: _offset, end: target)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _ctrl
+      ..value = 0
+      ..forward();
+    _anim.addListener(() {
+      if (mounted) setState(() => _offset = _anim.value);
+    });
+  }
+
+  void _onDragUpdate(DragUpdateDetails d) {
+    if (_ctrl.isAnimating) _ctrl.stop();
+    setState(() {
+      _offset = (_offset + d.delta.dx).clamp(-_revealWidth, 0);
+    });
+  }
+
+  void _onDragEnd(DragEndDetails d) {
+    final velocity = d.primaryVelocity ?? 0;
+    final shouldOpen =
+        velocity < -300 || (_offset < -_revealWidth / 2 && velocity <= 300);
+    _snapTo(shouldOpen ? -_revealWidth : 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final a = widget.alimentConsomme;
+    final macros = a.aliment.getMacrosPourQuantite(a.quantite);
+
+    return ClipRect(
+      child: Stack(
+        children: [
+          // Zone de suppression (derrière la carte, côté droit)
+          Positioned.fill(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: GestureDetector(
+                onTap: widget.onDelete,
+                child: Container(
+                  width: _revealWidth,
+                  color: const Color(0xFF4A4A4A),
+                  child: const Icon(Icons.close, color: Colors.red, size: 20),
+                ),
+              ),
+            ),
+          ),
+          // Carte principale (glissable)
+          Transform.translate(
+            offset: Offset(_offset, 0),
+            child: GestureDetector(
+              onHorizontalDragUpdate: _onDragUpdate,
+              onHorizontalDragEnd: _onDragEnd,
+              child: Container(
+                color: const Color(0xFF4A4A4A),
+                child: ListTile(
+                  title: Text(
+                    a.aliment.nom,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    '${macros['calories']?.toStringAsFixed(0)} kcal - '
+                    'P. ${macros['proteines']?.toStringAsFixed(0)}'
+                    ' | L. ${macros['lipides']?.toStringAsFixed(0)}'
+                    ' | G. ${macros['glucides']?.toStringAsFixed(0)}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 10),
+                  ),
+                  trailing: PopupMenuButton<String>(
+                    color: const Color(0xFF4A4A4A),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    onSelected: (value) {
+                      if (value == 'custom') {
+                        widget.onModify();
+                      } else {
+                        widget.onUpdateQuantite(double.parse(value));
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(value: '5',   child: Text('5 g',   style: TextStyle(color: Colors.white))),
+                      const PopupMenuItem(value: '50',  child: Text('50 g',  style: TextStyle(color: Colors.white))),
+                      const PopupMenuItem(value: '100', child: Text('100 g', style: TextStyle(color: Colors.white))),
+                      const PopupMenuDivider(),
+                      const PopupMenuItem(value: 'custom', child: Text('Saisir une valeur...', style: TextStyle(color: Color(0xFF357E50)))),
+                    ],
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4A4A4A),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF357E50)),
+                      ),
+                      child: Text(
+                        '${a.quantite.toStringAsFixed(0)} g',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

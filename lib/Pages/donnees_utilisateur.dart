@@ -151,15 +151,16 @@ Future<void> _loadUserData() async {
       });
 
       // Sauvegarde locale dans SharedPreferences
+      // Clés avec underscore + minuscule pour correspondre à _loadUserData()
       final prefs = await SharedPreferences.getInstance();
       //final uid = FirebaseAuth.instance.currentUser!.uid;
-      await prefs.setDouble('${uid}Poids', utilisateur.poids);
-      await prefs.setDouble('${uid}Taille', utilisateur.taille);
-      await prefs.setInt('$uidÂge', utilisateur.age);
-      await prefs.setString('${uid}Sexe', utilisateur.sexe);
-      await prefs.setString('${uid}niveauActivite', _niveauActivite ?? '');
-      await prefs.setString('${uid}sport', _sport ?? '');
-      await prefs.setString('${uid}objectif', _objectif ?? '');
+      await prefs.setDouble('${uid}_poids', utilisateur.poids);
+      await prefs.setDouble('${uid}_taille', utilisateur.taille);
+      await prefs.setInt('${uid}_age', utilisateur.age);
+      await prefs.setString('${uid}_sexe', utilisateur.sexe);
+      await prefs.setString('${uid}_niveauActivite', _niveauActivite ?? '');
+      await prefs.setString('${uid}_sport', _sport ?? '');
+      await prefs.setString('${uid}_objectif', _objectif ?? '');
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -459,7 +460,7 @@ child: PopScope(
               ),
               
               // SizedBox(height: saveHeight + (4*paddingH)),
-              const SizedBox(height: gap * 2),
+              SizedBox(height: saveHeight + 2*paddingH),
 
               
               

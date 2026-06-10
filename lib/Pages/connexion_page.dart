@@ -36,10 +36,8 @@ class _ConnexionPageState extends State<ConnexionPage> {
   await prefs.setString('NiveauActivité', user.nActivite);
   await prefs.setString('Sport', user.typeSport);
   await prefs.setString('Objectif', user.objectif);
-}
-
-
-
+  // await prefs.setString('Calories_Min', user.caloriesMin);
+  }
 
 
 /*Future<void> _chargerDonnees() async {
@@ -83,35 +81,46 @@ Future<UserModel?> fetchUserData() async {
   }
   return null;
 }
-
-  
-  
-  
-  
-  
-  
   
   @override
   void initState() {
     super.initState();
     
-    _loadSavedEmails();
-
-    // Redirige automatiquement si l'utilisateur est déjà connecté
-    if (FirebaseAuth.instance.currentUser != null) {
-      
-      Future.microtask(() {
-        if (!mounted) return;
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => TableauDeBord()),
-        );
-      });
-    }
+    _loadSavedEmails();    
   }
   
   // SIGN IN
+  Future<void> _resetPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() => _errorMessage = "Entrez votre email pour réinitialiser le mot de passe.");
+      return;
+    }
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          backgroundColor: const Color(0xFF393939),
+          title: const Text("Email envoyé", style: TextStyle(color: Colors.white)),
+          content: Text(
+            "Un lien de réinitialisation a été envoyé à $email.",
+            style: const TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("OK", style: TextStyle(color: Color(0xFF357E50))),
+            ),
+          ],
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      setState(() => _errorMessage = e.message ?? "Erreur lors de l'envoi.");
+    }
+  }
+
   Future<void> _signIn() async {
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
@@ -133,7 +142,7 @@ Future<UserModel?> fetchUserData() async {
         context,
         MaterialPageRoute(builder: (context) => TableauDeBord()),
       );
-} else {
+      } else {
       setState(() {
         _errorMessage = "Impossible de récupérer les données utilisateur.";
       });
@@ -356,7 +365,7 @@ final _passwordFocusNode = FocusNode();
                             maxHeight: fieldHeight * 0.25,                            
                           ), 
                           
-                          child: SvgPicture.asset('images/icon-oeil-ouvert.svg',
+                          child: SvgPicture.asset('assets/images/icon-oeil-ouvert.svg',
                           colorFilter: ColorFilter.mode(Colors.grey,
                           BlendMode.srcIn,
                           ),
@@ -368,7 +377,7 @@ final _passwordFocusNode = FocusNode();
                             maxHeight: fieldHeight * 0.5,                            
                           ), 
                           
-                          child: SvgPicture.asset('images/icon-oeil-ferme.svg',
+                          child: SvgPicture.asset('assets/images/icon-oeil-ferme.svg',
                           colorFilter: ColorFilter.mode(Colors.grey,
                           BlendMode.srcIn,
                           ),
@@ -431,7 +440,16 @@ final _passwordFocusNode = FocusNode();
                   ),
                 ),
                 
-                const SizedBox(height: 25),
+                // Mot de passe oublié
+                TextButton(
+                  onPressed: _resetPassword,
+                  child: const Text(
+                    "Mot de passe oublié ?",
+                    style: TextStyle(color: Color(0xFF357E50), fontSize: 13),
+                  ),
+                ),
+
+                const SizedBox(height: 10),
 
                 //OU
                 Row(

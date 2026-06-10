@@ -1,3 +1,16 @@
+enum Repas { petitDejeuner, dejeuner, diner, collation }
+
+extension RepasLabel on Repas {
+  String get label {
+    switch (this) {
+      case Repas.petitDejeuner: return 'Petit-déjeuner';
+      case Repas.dejeuner:      return 'Déjeuner';
+      case Repas.diner:         return 'Dîner';
+      case Repas.collation:     return 'Collation';
+    }
+  }
+}
+
 class Aliment {
   final String nom;
   final double calories;
@@ -138,20 +151,32 @@ static String _nettoyerNomPortion(String nom) {
 class AlimentConsomme {
   final Aliment aliment;
   double quantite;
+  Repas? repas; // nullable pour compatibilité avec données existantes
 
-  AlimentConsomme(this.aliment, this.quantite);
+  AlimentConsomme(this.aliment, this.quantite, {this.repas});
 
   Map<String, dynamic> toJson() => {
-  'aliment': aliment.toJson(),
-  'quantite': quantite,
-};
+    'aliment': aliment.toJson(),
+    'quantite': quantite,
+    if (repas != null) 'repas': repas!.name,
+  };
 
-factory AlimentConsomme.fromJson(Map<String, dynamic> json) {
-  return AlimentConsomme(
-    Aliment.fromJson(json['aliment']),
-    (json['quantite'] as num).toDouble(),
-  );
-}
+  factory AlimentConsomme.fromJson(Map<String, dynamic> json) {
+    Repas? repas;
+    final repasStr = json['repas'] as String?;
+    if (repasStr != null) {
+      // firstWhere avec orElse pour ne pas crasher sur une valeur inconnue
+      repas = Repas.values.firstWhere(
+        (r) => r.name == repasStr,
+        orElse: () => Repas.dejeuner,
+      );
+    }
+    return AlimentConsomme(
+      Aliment.fromJson(json['aliment']),
+      (json['quantite'] as num).toDouble(),
+      repas: repas,
+    );
+  }
 }
 
 class Portion {

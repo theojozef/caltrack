@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/aliment.dart';
+import 'package:math_expressions/math_expressions.dart';
+
 
 class QuantiteAliment extends StatefulWidget {
   //final String nom;
@@ -127,6 +129,7 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
             
       backgroundColor: const Color(0xFF393939),
       body: SafeArea(
+        child: SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.all(40), // 16
         child: Column(
@@ -278,6 +281,7 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
         ),
       ),
       ),
+      ),
     );
   }
 
@@ -310,25 +314,31 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
       // ✅ Quand l’utilisateur clique dans le champ, on efface la valeur
       onTap: () {
         controller.clear();
+        _buildOperatorsRow;
       },      
       
       onChanged: (value) {
-        final double? nouvelleQuantite = double.tryParse(value);
-        if (nouvelleQuantite != null) {
-        
-        // Met à jour l’état interne de l'application
-        setState(() {
-          
-          quantite = nouvelleQuantite;
+        if (value.trim().isEmpty) return;
 
-          /* if (portionChoisie == portionGrammes) {
-            // Met à jour la portion grammes si sélectionnée
-            portionGrammes.poids = quantite;
-          } */        
-          _recalculerMacros(quantite);
-        });
+  try {
+    // Parser l’expression
+    final parser = ShuntingYardParser();
+    Expression exp = parser.parse(value);
+    ContextModel cm = ContextModel();
+
+    // Calcul du résultat
+    double resultat = exp.evaluate(EvaluationType.REAL, cm);
+
+    setState(() {
+      quantite = resultat;
+      _recalculerMacros(quantite);
+    });
+
+  } catch (e) {
+    // Si erreur de syntaxe, on ne fait rien
         }
       },
+
       decoration: InputDecoration(
         labelText: label,
         labelStyle: const TextStyle(color: Colors.white),
@@ -452,4 +462,25 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
       
     );
   }
+
+  Widget _buildOperatorsRow() {
+    final ops = ['+', '-', '*', '/'];
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: ops.map((op) {
+        return ElevatedButton(
+          onPressed: () {
+            final text = quantiteController.text;
+            quantiteController.text = "$text$op";
+            quantiteController.selection = TextSelection.fromPosition(
+              TextPosition(offset: quantiteController.text.length),
+            );
+          },
+          child: Text(op),
+        );
+      }).toList(),
+    );
+  }
+
+
 }
