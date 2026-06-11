@@ -26,7 +26,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   static const double _sliderW = 14;
   static const double _sliderH = 52;
-  static const double _sliderRadius = 20;
+  static const double _sliderRadius = _sliderW * 2; // 20
 
   @override
   void initState() {
@@ -110,10 +110,10 @@ class _SplashScreenState extends State<SplashScreen>
   // Mêmes couleurs que les barres (color_utils.dart), zones de transition
   // élargies à 35% de part et d'autre pour un fondu progressif sur le splash.
   Color _bgColor(double t) {
-    const colorLeft   = Color(0xFFBC8C56); // brun
-    const colorMiddle = Color(0xFF0BE754); // vert
-    const colorRight  = Color(0xFFBC5A56); // rouge
-    const base        = Color(0xFF393939); // fond gris
+    const colorLeft   = Color(0x3ABC8C56); // brun 0xFFBC8C56
+    const colorMiddle = Color(0x3A0BE754); // vert 0xFF0BE754
+    const colorRight  = Color(0x3ABC5A56); // rouge 0xFFBC5A56
+    const base        = Color(0xFF393939); // fond gris 0xFF393939
 
     final Color tinted;
     if (t < 0.35) {
