@@ -8120,7 +8120,7 @@ _.r=g},
 aHN(){var s=0,r=A.z(t.SW),q,p,o,n,m,l,k,j,i,h,g
 var $async$aHN=A.v(function(a,b){if(a===1)return A.w(b,r)
 while(true)switch(s){case 0:s=3
-return A.q($.a78().auf("data/ciqual4.csv"),$async$aHN)
+return A.q($.a78().auf("assets/data/ciqual4.csv"),$async$aHN)
 case 3:p=b
 o=A.b7f(A.b([p],t._m),!0,null,";",'"','"',"\n",!0,!0,null).apr(p,t.z)
 n=B.b.gX(o)
@@ -8368,7 +8368,7 @@ return A.y($async$SM,r)},
 SN(a){return A.b2m(a)},
 b2m(a){var s=0,r=A.z(t.SW),q,p,o,n,m,l,k,j
 var $async$SN=A.v(function(b,c){if(b===1)return A.w(c,r)
-while(true)switch(s){case 0:k=A.LZ(null,"world.openfoodfacts.org","/api/v2/search",A.al(["q",a,"fields","product_name,product_name_fr,product_name_en,nutriments,serving_size,serving_quantity","page_size","30"],t.N,t.z),"https")
+while(true)switch(s){case 0:k=A.LZ(null,"world.openfoodfacts.org","/api/v2/search",A.al(["q",a,"fields","product_name,product_name_fr,product_name_en,nutriments,serving_size,serving_quantity","page_size","30","lc","fr","cc","fr"],t.N,t.z),"https")
 s=3
 return A.q(A.SM(k),$async$SN)
 case 3:j=c

@@ -3,7 +3,7 @@ import 'package:csv/csv.dart';
 import 'package:cal_track_v1/models/aliment.dart';
 
 Future<List<Aliment>> chargerAlimentsDepuisCSV() async {
-  final data = await rootBundle.loadString('data/ciqual4.csv');
+  final data = await rootBundle.loadString('assets/data/ciqual4.csv');
   final csvTable = const CsvToListConverter(fieldDelimiter: ';', eol: '\n').convert(data);
 
   // On récupère les entêtes pour trouver les bonnes colonnes

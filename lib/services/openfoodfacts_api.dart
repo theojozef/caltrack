@@ -69,6 +69,8 @@ class OpenFoodFactsAPI {
         'q': query,
         'fields': 'product_name,product_name_fr,product_name_en,nutriments,serving_size,serving_quantity',
         'page_size': '30',
+        'lc': 'fr',
+        'cc': 'fr',
       },
     );
 
