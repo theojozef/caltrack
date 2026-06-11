@@ -61,17 +61,18 @@ class OpenFoodFactsAPI {
   }
 
   static Future<List<Aliment>> searchAliments(String query) async {
+    // rawQuery évite l'encodage des virgules (%2C) dans 'fields' qui empêche
+    // OpenFoodFacts de reconnaître les champs demandés → nutriments null
     final directUri = Uri(
       scheme: 'https',
       host: 'world.openfoodfacts.org',
       path: '/api/v2/search',
-      queryParameters: {
-        'q': query,
-        'fields': 'product_name,product_name_fr,product_name_en,nutriments,serving_size,serving_quantity',
-        'page_size': '30',
-        'lc': 'fr',
-        'cc': 'fr',
-      },
+    ).replace(
+      query: 'q=${Uri.encodeComponent(query)}'
+          '&fields=product_name,product_name_fr,product_name_en,nutriments,serving_size,serving_quantity'
+          '&page_size=30'
+          '&lc=fr'
+          '&cc=fr',
     );
 
     // 1. Accès direct — l'API v2 expose CORS nativement, fonctionne en mobile
@@ -83,8 +84,8 @@ class OpenFoodFactsAPI {
     if (response == null && kIsWeb) {
       final encoded = Uri.encodeComponent(directUri.toString());
       final proxies = [
-        'https://api.allorigins.win/raw?url=$encoded',
         'https://corsproxy.io/?$encoded',
+        'https://api.allorigins.win/raw?url=$encoded',
       ];
       for (final proxyUrl in proxies) {
         response = await _tryGet(Uri.parse(proxyUrl));
