@@ -50,6 +50,7 @@ dependencies:
   flutter_secure_storage: ^9.0.0
   math_expressions: ^2.4.0
   flutter_screenutil: ^5.9.0
+  openfoodfacts: ^3.29.0
   
 
 
