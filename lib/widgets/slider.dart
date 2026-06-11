@@ -12,7 +12,7 @@ class SliderButton extends StatelessWidget {
   });
 
   static double sliderWidth = 7;
-  static double sliderHeight = sliderWidth * 3.85;
+  static double sliderHeight = 27;
 
   @override
   Widget build(BuildContext context) {

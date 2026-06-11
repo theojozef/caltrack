@@ -4,21 +4,22 @@ import 'package:http/http.dart' as http;
 import '../models/aliment.dart';
 
 class OpenFoodFactsAPI {
+  // Cloudflare Worker proxy — ajoute CORS headers à search.openfoodfacts.org
   static const String _baseUrl =
-      'https://world.openfoodfacts.org/api/v2/search';
+      'https://flexfoodctv2.martin-theo89710.workers.dev';
 
   static Future<List<Aliment>> searchAliments(String query) async {
     try {
-      // Uri.replace(query:) preserve les virgules non encodées dans fields
+      // Uri.replace(query:) préserve les virgules non encodées dans fields
       final uri = Uri.parse(_baseUrl).replace(
-        query: 'search_terms=${Uri.encodeQueryComponent(query)}'
+        query: 'q=${Uri.encodeQueryComponent(query)}'
             '&fields=product_name,nutriments,serving_size,serving_quantity'
-            '&json=1&page_size=30&lc=fr&cc=fr&page=1',
+            '&page_size=30&page=1&langs=fr',
       );
 
-      final response = await http.get(uri, headers: {
-        'User-Agent': 'flexfood.ctv2/1.0.0 (martin.to@orange.fr)',
-      }).timeout(const Duration(seconds: 15));
+      final response = await http
+          .get(uri)
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode != 200) {
         debugPrint('[OFF] statut: ${response.statusCode}');
@@ -26,10 +27,11 @@ class OpenFoodFactsAPI {
       }
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final products = data['products'] as List<dynamic>?;
-      if (products == null || products.isEmpty) return [];
+      // search.openfoodfacts.org retourne "hits" (pas "products")
+      final hits = data['hits'] as List<dynamic>?;
+      if (hits == null || hits.isEmpty) return [];
 
-      return products
+      return hits
           .map<Aliment?>((p) => _parseProduct(p as Map<String, dynamic>))
           .whereType<Aliment>()
           .toList();
@@ -57,8 +59,8 @@ class OpenFoodFactsAPI {
       final portions = <Portion>[];
       final servingQty = _toDouble(p['serving_quantity']);
       if (servingQty != null && servingQty > 0) {
-        portions
-            .add(Portion(nom: (p['serving_size'] as String?) ?? '', poids: servingQty));
+        portions.add(
+            Portion(nom: (p['serving_size'] as String?) ?? '', poids: servingQty));
       }
 
       return Aliment(

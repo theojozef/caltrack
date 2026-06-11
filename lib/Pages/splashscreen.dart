@@ -24,8 +24,8 @@ class _SplashScreenState extends State<SplashScreen>
   bool _navigationTriggered = false;
   Widget? _nextPage;
 
-  static const double _sliderW = 14;
-  static const double _sliderH = 52;
+  static const double _sliderW = 20;
+  static const double _sliderH = _sliderW * 3.5; // 52
   static const double _sliderRadius = _sliderW * 2; // 20
 
   @override
@@ -155,7 +155,7 @@ class _SplashScreenState extends State<SplashScreen>
                     boxShadow: const [
                       BoxShadow(
                         color: Colors.black26,
-                        blurRadius: 4,
+                        blurRadius: 2, // 4
                         offset: Offset(0, 2),
                       ),
                     ],
