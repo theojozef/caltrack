@@ -1,12 +1,18 @@
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:csv/csv.dart';
 import 'package:cal_track_v1/models/aliment.dart';
 
 Future<List<Aliment>> chargerAlimentsDepuisCSV() async {
+  // rootBundle doit rester sur l'isolate principal
   final data = await rootBundle.loadString('assets/data/ciqual4.csv');
+  // Parsing CPU-intensif déplacé dans un isolate séparé
+  return compute(_parseCSV, data);
+}
+
+List<Aliment> _parseCSV(String data) {
   final csvTable = const CsvToListConverter(fieldDelimiter: ';', eol: '\n').convert(data);
 
-  // On récupère les entêtes pour trouver les bonnes colonnes
   final headers = csvTable.first;
   final int nomIndex = headers.indexOf('alim_nom_fr');
   final int kcalIndex = headers.indexWhere((e) => e.toString().contains('Energie'));
@@ -14,7 +20,6 @@ Future<List<Aliment>> chargerAlimentsDepuisCSV() async {
   final int glucIndex = headers.indexWhere((e) => e.toString().contains('Glucides'));
   final int lipIndex = headers.indexWhere((e) => e.toString().contains('Lipides'));
 
-  // On transforme chaque ligne en objet Aliment
   return csvTable.skip(1).map((row) {
     try {
       return Aliment(
@@ -23,8 +28,9 @@ Future<List<Aliment>> chargerAlimentsDepuisCSV() async {
         proteines: double.tryParse(row[protIndex].toString().replaceAll(',', '.')) ?? 0,
         glucides: double.tryParse(row[glucIndex].toString().replaceAll(',', '.')) ?? 0,
         lipides: double.tryParse(row[lipIndex].toString().replaceAll(',', '.')) ?? 0,
-        fibres: 0, // ciqual4.csv n'a pas de colonne fibres
-        sucresLibres: 0, // ciqual4.csv n'a pas de colonne sucres
+        fibres: 0,
+        sucresLibres: 0,
+        isCiqual: true,
       );
     } catch (e) {
       return null;

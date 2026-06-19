@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Outils locaux — ne pas versionner
+.claude/
+devtools_options.yaml

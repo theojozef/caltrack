@@ -37,30 +37,28 @@ double _getValeurPosition(
 }
 
 
-class GroupeBarre extends StatefulWidget {  
+class GroupeBarre extends StatefulWidget {
   final double barWidth;
-  final double barHeight;
-  final double cornerRadius;
-  final double borneHeight;
   final Color borneColor;
   final String titre;
-  final double borneWidth;
   final double valeurMin;  // 👈 ajouté
   final double valeurMax;  // 👈 ajouté
   final double compteurCalories;
+  final double compteurFontSize;
+  final FontWeight compteurFontWeight;
+  final double borneFontSize;
 
   const GroupeBarre({
     super.key,
-    required this.titre,    
+    required this.titre,
     required this.barWidth, // = 250, //322
-    this.barHeight = 35, // 35
-    this.cornerRadius = 23,
-    this.borneHeight = 21,
-    this.borneWidth = 3,
     this.borneColor = const Color(0x0AFFFFFF),
     required this.valeurMin,   // 👈 ajouté
     required this.valeurMax,   // 👈 ajouté
     required this.compteurCalories,
+    this.compteurFontSize = 10,
+    this.compteurFontWeight = FontWeight.normal,
+    this.borneFontSize = 10,
   });
 
   @override
@@ -165,7 +163,11 @@ class _GroupeBarreState extends State<GroupeBarre> with SingleTickerProviderStat
     
     //final color = getBarColor(sliderValue, widget.barWidth);
     final width = widget.barWidth;
-    
+    final double barHeight   = width * (35 / 320);
+    final double cornerRadius = barHeight * (23 / 35);
+    final double borneHeight  = barHeight * (21 / 35);
+    final double borneWidth   = width * (3 / 320);
+    final double marge        = width * (15 / 320);
 
     // final limites = getColorLimites(widget.barWidth);
  
@@ -186,7 +188,7 @@ class _GroupeBarreState extends State<GroupeBarre> with SingleTickerProviderStat
         
         SizedBox( // barre colorée
           width: width,
-          height: widget.barHeight, // 35
+          height: barHeight,
           
           child: AnimatedBuilder(
           animation: _sliderAnimation,
@@ -196,14 +198,15 @@ class _GroupeBarreState extends State<GroupeBarre> with SingleTickerProviderStat
             //final sliderPosition = animatedSliderValue * (width - 30) + 15;
           return Stack(
             children: [
-              _buildAnimatedBar(color),
-              _buildBornes(width),
+              _buildAnimatedBar(color, barHeight, cornerRadius),
+              _buildBornes(width, barHeight, borneHeight, borneWidth),
               //_buildLimites(width, widget.valeurMin),
               //_buildLimites(width, widget.valeurMax),
-                            
+
               // CURSEUR
-              SliderButton(                 
-                position: _sliderAnimation.value * (width - 30) + 15  // Value * (width - 30) + 15,
+              SliderButton(
+                position: _sliderAnimation.value * (width - 2 * marge) + marge,
+                barHeight: barHeight,
                 /* onMove: (delta) {
                   setState(() {
                     sliderValue += delta / (width); // (width - 30)
@@ -211,13 +214,16 @@ class _GroupeBarreState extends State<GroupeBarre> with SingleTickerProviderStat
                   });
                 //},*/
 
-                
+
 
               ),
               
               ValeurCompteur(
                 position: _getValeurPosition(widget.compteurCalories, widget.valeurMin, widget.valeurMax, width), // width * 0.5,
                 valeuraffichee: widget.compteurCalories.round().toDouble(),
+                barHeight: barHeight,
+                fontSize: widget.compteurFontSize,
+                fontWeight: widget.compteurFontWeight,
               )
             ],
           );
@@ -229,41 +235,40 @@ class _GroupeBarreState extends State<GroupeBarre> with SingleTickerProviderStat
   }
   
 
-  Widget _buildAnimatedBar(Color color) {
+  Widget _buildAnimatedBar(Color color, double barHeight, double cornerRadius) {
       return Container(
         width: widget.barWidth,
-        height: widget.barHeight,
+        height: barHeight,
         decoration: BoxDecoration(
           color: color,
-          borderRadius: BorderRadius.circular(widget.cornerRadius),
+          borderRadius: BorderRadius.circular(cornerRadius),
         ),
       );
   }
 
 
   // BORNES
-  Widget _buildBornes(double width) => Stack(
+  Widget _buildBornes(double width, double barHeight, double borneHeight, double borneWidth) => Stack(
         children: [
-          _borneAt(width * 0.25),
-          _borneAt(width * 0.75),          
+          _borneAt(width * 0.25, barHeight, borneHeight, borneWidth),
+          _borneAt(width * 0.75, barHeight, borneHeight, borneWidth),
         ],
       );
-  Widget _borneAt(double left) => Positioned(
-        left: left - (widget.borneWidth /2),
-        top: (widget.barHeight - widget.borneHeight) / 2,
+  Widget _borneAt(double left, double barHeight, double borneHeight, double borneWidth) => Positioned(
+        left: left - (borneWidth / 2),
+        top: (barHeight - borneHeight) / 2,
         child: Container(
-          width: widget.borneWidth,
-          height: widget.borneHeight,
+          width: borneWidth,
+          height: borneHeight,
           decoration: BoxDecoration(
             color: widget.borneColor,
-            borderRadius: BorderRadius.circular(widget.borneWidth /2),
-          ) 
-          
+            borderRadius: BorderRadius.circular(borneWidth / 2),
+          )
         ),
       );
   
   //TEXTE BORNES
-  Widget _buildLimites(double width) => Stack(        
+  Widget _buildLimites(double width) => Stack(
       children: [
       _borneTexte(width * 0.25, widget.valeurMin),
       _titreBarre(width),
@@ -273,19 +278,19 @@ class _GroupeBarreState extends State<GroupeBarre> with SingleTickerProviderStat
 
   Widget _borneTexte(double left, double valeur) => Positioned(
     left: left - 20, // moitié de la largeur du container
-    top: 0, //(widget.barHeight - 20) /2,    
+    top: 0, //(widget.barHeight - 20) /2,
     child: Container(
       width: 40, // largeur du container
       height: 20,
       color: Colors.transparent,
       alignment: Alignment.bottomCenter, // centrer le texte
-      child: Text(      
+      child: Text(
         valeur.toStringAsFixed(0),
-        style : const TextStyle(
-          color: Color(0xFFFFFFFF),
-          fontSize: 10,    
-      ),  
-      ),      
+        style: TextStyle(
+          color: const Color(0xFFFFFFFF),
+          fontSize: widget.borneFontSize,
+      ),
+      ),
       ),
   );
 

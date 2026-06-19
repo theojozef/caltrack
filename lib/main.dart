@@ -17,7 +17,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Forcer l'orientation portrait uniquement
-  SystemChrome.setPreferredOrientations([ //await ?
+  await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     // DeviceOrientation.portraitDown, // optionnel si vous voulez autoriser le portrait inversé
   ]);
@@ -48,10 +48,21 @@ class MyApp extends StatelessWidget {
       minTextAdapt: true,
       builder: (context, child) {    
         return MaterialApp(
-          title: 'Cal\' Track',
-          //debugShowCheckedModeBanner: false,
-          theme: ThemeData(                
+          title: 'forkshot',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
             primarySwatch: Colors.green,
+            textSelectionTheme: const TextSelectionThemeData(
+              selectionColor: Color(0x80357E50),
+              selectionHandleColor: Color(0xFF357E50),
+              cursorColor: Color(0xFF357E50),
+            ),
+            pageTransitionsTheme: const PageTransitionsTheme(
+              builders: {
+                TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+                TargetPlatform.android: ZoomPageTransitionsBuilder(),
+              },
+            ),
           ),
           // home: const TableauDeBord(),
           // home: const ConnexionPage(),

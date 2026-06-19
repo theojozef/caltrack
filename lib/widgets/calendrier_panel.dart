@@ -39,9 +39,9 @@ class _CalendrierPanelState extends State<CalendrierPanel> {
       setState(() => _moisAffiche = DateTime(_moisAffiche.year, _moisAffiche.month - 1));
 
   void _moisSuivant() {
-    final now = DateTime.now();
+    final limite = DateTime.now().add(const Duration(days: 7));
     final next = DateTime(_moisAffiche.year, _moisAffiche.month + 1);
-    if (next.year > now.year || (next.year == now.year && next.month > now.month)) return;
+    if (next.year > limite.year || (next.year == limite.year && next.month > limite.month)) return;
     setState(() => _moisAffiche = next);
   }
 
@@ -53,13 +53,14 @@ class _CalendrierPanelState extends State<CalendrierPanel> {
     final decalage = premierJour.weekday - 1; // lundi = 0
     final nbJours = DateTime(_moisAffiche.year, _moisAffiche.month + 1, 0).day;
 
-    final now = DateTime.now();
-    final peutAvancer = !(_moisAffiche.year == now.year && _moisAffiche.month == now.month);
+    final dateLimite = todayOnly.add(const Duration(days: 7));
+    final moisLimite = DateTime(dateLimite.year, dateLimite.month);
+    final peutAvancer = DateTime(_moisAffiche.year, _moisAffiche.month).isBefore(moisLimite);
 
     final cellules = <Widget>[
       for (int i = 0; i < decalage; i++) const SizedBox(),
       for (int jour = 1; jour <= nbJours; jour++)
-        _buildJour(jour, todayOnly),
+        _buildJour(jour, todayOnly, dateLimite),
     ];
 
     return Container(
@@ -128,13 +129,13 @@ class _CalendrierPanelState extends State<CalendrierPanel> {
     );
   }
 
-  Widget _buildJour(int jour, DateTime todayOnly) {
+  Widget _buildJour(int jour, DateTime todayOnly, DateTime dateLimite) {
     final date = DateTime(_moisAffiche.year, _moisAffiche.month, jour);
     final dateStr = _fmt(date);
     final estAujourdhui = date == todayOnly;
     final estSelectionne = _fmt(date) == _fmt(widget.dateSelectionnee);
     final aDonnees = widget.joursAvecDonnees.contains(dateStr);
-    final estFutur = date.isAfter(todayOnly);
+    final estFutur = date.isAfter(dateLimite);
 
     return GestureDetector(
       onTap: estFutur ? null : () {

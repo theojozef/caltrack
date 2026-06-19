@@ -107,13 +107,13 @@ class CalculateurNutrition {
     glucidesMax = margeMin.toInt();
   }
 
-  if (caloriesMin < (4*protMin + 4*lipidesMin)) {
-    caloriesMin = (4*protMin + 4*lipidesMin);
+  if (caloriesMin < (4*protMin + 9*lipidesMin)) {
+    caloriesMin = (4*protMin + 9*lipidesMin);
   }
   // ---------------------------
 
-  // ✅ Calcul des fibres
-  int fibresMin = (caloriesMin * 10 / 1000).round();
+  // ✅ Calcul des fibres (ANSES : 25 g/j min → 30 g/j pour 2 000 kcal = 12.5–15 g/1 000 kcal)
+  int fibresMin = (caloriesMin * 12.5 / 1000).round();
   int fibresMax = (caloriesMax * 15 / 1000).round();
 
   // ---------------------------
@@ -170,12 +170,12 @@ class CalculateurNutrition {
     glucidesMax = 1000;
   }
 
-  if (caloriesMin < (4*protMin + 4*lipidesMin)) {
-    caloriesMin = (4*protMin + 4*lipidesMin);
+  if (caloriesMin < (4*protMin + 9*lipidesMin)) {
+    caloriesMin = (4*protMin + 9*lipidesMin);
   }
   // ---------------------------
 
-  int fibresMin = (caloriesMin * 10 / 1000).round();
+  int fibresMin = (caloriesMin * 12.5 / 1000).round();
   int fibresMax = (caloriesMax * 15 / 1000).round();
 
   // ---------------------------

@@ -1,11 +1,13 @@
 import 'dart:ui';
 
+import 'package:cal_track_v1/Pages/connexion_page.dart';
 import 'package:cal_track_v1/Pages/tableaudebord.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cal_track_v1/models/user_data.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cal_track_v1/services/local_storage_service.dart';
 
 class DonneesUtilisateurPage extends StatefulWidget {
   
@@ -53,10 +55,27 @@ void initState() {
 }
 
 Future<void> _loadUserData() async {
-  final prefs = await SharedPreferences.getInstance();
   final uid = FirebaseAuth.instance.currentUser?.uid;
   if (uid == null) return;
 
+  // 1. LocalStorageService (même source que tableaudebord)
+  final localUser = await LocalStorageService.loadUserData(uid);
+  if (localUser != null) {
+    setState(() {
+      _poidsController.text = localUser.poids.toString();
+      _tailleController.text = localUser.taille.toString();
+      _ageController.text = localUser.age.toString();
+      _sexe = localUser.sexe;
+      _niveauActivite = localUser.nActivite;
+      _sport = localUser.typeSport;
+      _objectif = localUser.objectif;
+      _isLoading = false;
+    });
+    return;
+  }
+
+  // 2. Fallback : clés plates (ancienne version)
+  final prefs = await SharedPreferences.getInstance();
   // Essaie de charger les données localement d'abord
   final poidsLocal = prefs.getDouble('${uid}_poids');
   final tailleLocal = prefs.getDouble('${uid}_taille');
@@ -86,8 +105,8 @@ Future<void> _loadUserData() async {
     });
     return; // On s’arrête ici car on a les données locales
   }
-  
-  // Sinon on charge depuis Firestore
+
+  // 3. Sinon on charge depuis Firestore
   final doc = await FirebaseFirestore.instance
   .collection('users')
   .doc(uid)
@@ -114,12 +133,59 @@ Future<void> _loadUserData() async {
   bool _isSaving = false;
   String? _errorMessage;
 
+  Future<void> _signOut() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF393939),
+        title: const Text('Déconnexion', style: TextStyle(color: Colors.white)),
+        content: const Text('Voulez-vous vraiment vous déconnecter ?', style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler', style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Se déconnecter', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    await FirebaseAuth.instance.signOut();
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const ConnexionPage()),
+    );
+  }
+
   @override
   void dispose() {
     _poidsController.dispose();
     _tailleController.dispose();
     _ageController.dispose();
     super.dispose();
+  }
+
+  double _calculIMC() {
+    final poids = double.tryParse(_poidsController.text) ?? 0;
+    final taille = double.tryParse(_tailleController.text) ?? 0;
+    if (taille == 0) return 0;
+    final tailleM = taille / 100;
+    return poids / (tailleM * tailleM);
+  }
+
+  Future<void> _verifierAlerte() async {
+    final imc = _calculIMC();
+    if (imc > 0 && imc < 18.5 && _objectif == 'déficit') {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => const _AlertePreventionDialog(),
+      );
+    }
   }
 
   Future<void> _saveUserData() async {
@@ -132,7 +198,11 @@ Future<void> _loadUserData() async {
     });
 
     try {
-      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) {
+        setState(() => _errorMessage = "Utilisateur non connecté.");
+        return;
+      }
 
       final utilisateur = _enregistrerDonnees();
       if (utilisateur == null) {
@@ -162,10 +232,18 @@ Future<void> _loadUserData() async {
       await prefs.setString('${uid}_sport', _sport ?? '');
       await prefs.setString('${uid}_objectif', _objectif ?? '');
 
+      // Mise à jour de userData_$userId pour rester synchronisé avec tableaudebord
+      await LocalStorageService.saveUserData(uid, utilisateur);
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Données enregistrées avec succès")),
       );
+
+      // Vérification préventive avant de naviguer
+      await _verifierAlerte();
+      if (!mounted) return;
+
       // 🔁 Redirection selon contexte
       if (widget.fromInscription) {
         Navigator.pushReplacement(
@@ -187,7 +265,6 @@ Future<void> _loadUserData() async {
   }
 
   static const double gap = 20;
-  final double fieldWidth = 310;
   static const double paddingH = 20;
   static const double pctScreen = 0.10;
   double saveHeight = 50;
@@ -195,6 +272,7 @@ Future<void> _loadUserData() async {
 
   @override
   Widget build(BuildContext context) {
+  final double fieldWidth = MediaQuery.of(context).size.width * 0.85;
 
   if (_isLoading) {
   return const Scaffold(
@@ -220,11 +298,6 @@ return Theme(
         labelStyle: TextStyle(color: Colors.deepOrange),        
       ),
       scaffoldBackgroundColor: Color(0xFF393939), // fond de la page
-      textSelectionTheme: TextSelectionThemeData(
-        cursorColor: Color(0xFF357E50), // curseur texte
-        selectionColor: Colors.grey[900],
-        selectionHandleColor: Colors.deepOrange,
-      ),
       textTheme: Theme.of(context).textTheme.copyWith(
         bodyMedium: TextStyle(color: Colors.white),  // pour le texte saisi dans TextFormField
       ),
@@ -298,10 +371,14 @@ child: PopScope(
                 decoration: InputDecoration(
                   labelText: 'Poids (kg)',
                   labelStyle: TextStyle(fontSize: 16, color: const Color(0xFFFFFFFF))),
-                  
+
                 keyboardType: TextInputType.number,
-                validator: (value) =>
-                    value == null || value.isEmpty ? 'Champ requis' : null,
+                validator: (value) {
+                  final v = double.tryParse(value ?? '');
+                  if (v == null) return 'Champ requis';
+                  if (v < 30 || v > 300) return 'Valeur entre 30 et 300 kg';
+                  return null;
+                },
               ),
               ),
               ),
@@ -318,8 +395,12 @@ child: PopScope(
                   labelText: 'Taille (cm)',
                   labelStyle: TextStyle(fontSize: 16, color: const Color(0xFFFFFFFF))),
                 keyboardType: TextInputType.number,
-                validator: (value) =>
-                    value == null || value.isEmpty ? 'Champ requis' : null,
+                validator: (value) {
+                  final v = double.tryParse(value ?? '');
+                  if (v == null) return 'Champ requis';
+                  if (v < 100 || v > 250) return 'Valeur entre 100 et 250 cm';
+                  return null;
+                },
               ),
               ),
               ),
@@ -337,8 +418,12 @@ child: PopScope(
                   labelText: 'Âge',
                   labelStyle: TextStyle(fontSize: 16, color: const Color(0xFFFFFFFF))),
                 keyboardType: TextInputType.number,
-                validator: (value) =>
-                    value == null || value.isEmpty ? 'Champ requis' : null,
+                validator: (value) {
+                  final v = int.tryParse(value ?? '');
+                  if (v == null) return 'Champ requis';
+                  if (v < 10 || v > 100) return 'Valeur entre 10 et 100 ans';
+                  return null;
+                },
               ),
               ),
               ),
@@ -483,7 +568,7 @@ child: PopScope(
                   height: MediaQuery.of(context).size.height * pctScreen,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   alignment: Alignment.bottomCenter,
-                  color: Color(0xFF676464).withAlpha(150), // Couleur semi-transparente
+                  color: const Color(0xFF393939),
                   child: Row(
                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -503,8 +588,11 @@ child: PopScope(
                     ),
                     ),
 
-                    // Espace équilibré : même largeur que l’icône
-                    const SizedBox(width: 30),
+                    IconButton(
+                      icon: const Icon(Icons.logout, color: Colors.red, size: 24),
+                      onPressed: _signOut,
+                      tooltip: 'Se déconnecter',
+                    ),
 
                   ],
                   ),
@@ -526,34 +614,28 @@ child: PopScope(
       child: ClipRect(
         child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        // minimum: const EdgeInsets.only(bottom: 16), // marge pour ne pas toucher le bord inférieur
         child: Padding(
-          padding: const EdgeInsets.all(paddingH),                
-                child: SizedBox(
-                  width: fieldWidth, 
-                  height: saveHeight,
-                  
-                  child: ElevatedButton(
-                    onPressed: _isSaving ? null : _saveUserData,
+          padding: const EdgeInsets.all(paddingH),
+          child: SizedBox(
+                width: fieldWidth,
+                height: saveHeight,
+                child: ElevatedButton(
+                  onPressed: _isSaving ? null : _saveUserData,
                   style: ElevatedButton.styleFrom(
-                    //padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
                     backgroundColor: Color(0xFF357E50),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                   ),
-                    child: _isSaving
+                  child: _isSaving
                     ? const CircularProgressIndicator(color: Color(0xFF357E50))
-                    : const Text("Enregistrer",
-                    style: TextStyle(color: Colors.white),
-                    ),
-                    
-              ),
+                    : const Text("Enregistrer", style: TextStyle(color: Colors.white)),
                 ),
               ),
         ),
       ),
               ),
+      ),
 
-              // const SizedBox(height: 40),       
+              // const SizedBox(height: 40),
             
             
             
@@ -567,5 +649,103 @@ child: PopScope(
 
     );
 
+  }
+}
+
+class _AlertePreventionDialog extends StatelessWidget {
+  const _AlertePreventionDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFF2C2C2C),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 26),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Information santé',
+              style: TextStyle(color: Colors.white, fontSize: 17),
+            ),
+          ),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'D\'après les informations que vous avez renseignées, votre indice de masse corporelle (IMC) indique que vous êtes actuellement en sous-poids. Dans ce contexte, un objectif de perte de poids pourrait être néfaste pour votre santé.\n\nNous vous encourageons vivement à consulter un professionnel de santé avant de modifier votre alimentation.',
+              style: TextStyle(color: Colors.white70, height: 1.5, fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            const Divider(color: Colors.white24),
+            const SizedBox(height: 8),
+            const Text(
+              'Conseils & ressources',
+              style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            const SizedBox(height: 10),
+            _infoItem(Icons.local_hospital_outlined, 'Consultez votre médecin ou un nutritionniste avant tout rééquilibrage alimentaire.'),
+            _infoItem(Icons.swap_vert_rounded, 'Un objectif "Maintien" ou "Prise de poids" serait plus adapté à votre profil actuel.'),
+            _infoItem(Icons.self_improvement, 'Privilégiez une alimentation variée et équilibrée, sans restriction sévère.'),
+            const SizedBox(height: 12),
+            const Text(
+              'Si vous traversez des difficultés avec votre rapport à l\'alimentation ou à votre corps :',
+              style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.4),
+            ),
+            const SizedBox(height: 8),
+            _ressourceItem('ANAB — Anorexie Boulimie', '0 800 008 008 · gratuit & anonyme'),
+            _ressourceItem('Fédération Française Anorexie Boulimie', 'ffab.fr'),
+            _ressourceItem('Manger Bouger (ANSES)', 'mangerbouger.fr'),
+          ],
+        ),
+      ),
+      actions: [
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF357E50),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Compris', style: TextStyle(color: Colors.white)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _infoItem(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: Colors.white54, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(text, style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _ressourceItem(String label, String detail) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('• $label', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+          Text('  $detail', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+        ],
+      ),
+    );
   }
 }

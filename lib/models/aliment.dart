@@ -17,9 +17,11 @@ class Aliment {
   final double proteines;
   final double lipides;
   final double glucides;
-  final double fibres;       
+  final double fibres;
   final double sucresLibres;
   final List<Portion> portions;
+  final double completeness; // 0.0–1.0, issu de OFF (0.0 pour CIQUAL)
+  final bool isCiqual; // true = données issues de la base ANSES-CIQUAL (certifiées)
 
   bool dejaAjoute; // true si l'utilisateur l'a déjà ajouté
 
@@ -29,10 +31,11 @@ class Aliment {
     required this.proteines,
     required this.lipides,
     required this.glucides,
-    required this.fibres,       
-    required this.sucresLibres, 
+    required this.fibres,
+    required this.sucresLibres,
     this.portions = const [],
-
+    this.completeness = 0.0,
+    this.isCiqual = false,
     this.dejaAjoute = false,
   });
 

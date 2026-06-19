@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/aliment.dart';
 import 'package:math_expressions/math_expressions.dart';
 
@@ -30,6 +31,9 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
   
   late TextEditingController quantiteController;
   late FocusNode quantiteFocusNode; // ✅ focus node pour le champ quantité
+  late ScrollController _scrollController;
+
+  String _fmtQty(double q) => q == q.roundToDouble() ? q.round().toString() : q.toStringAsFixed(1);
   
   double? calories;
   double? proteines;
@@ -72,8 +76,9 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
   }
     
     // Init du contrôleur avec la quantité par défaut
-    quantiteController = TextEditingController(text: quantite.toString());
+    quantiteController = TextEditingController(text: _fmtQty(quantite));
     quantiteFocusNode = FocusNode(); // ✅ init
+    _scrollController = ScrollController();
 
     // Calcul initial
     _recalculerMacros(quantite);
@@ -113,27 +118,40 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
   
   // VARIABLES
   static const double champsQheight = 31;
-  static const double champsQfontSize = 14;
+  static const double champsQfontSize = 12;
+  static const Set<String> _operateurs = {'+', '−', '×', '÷'};
 
   @override
   void dispose() {
     quantiteController.dispose();
-    quantiteFocusNode.dispose(); // ✅ libération du focus node    
+    quantiteFocusNode.dispose(); // ✅ libération du focus node
+    _scrollController.dispose();
     super.dispose();
   }
 
   // UI
   @override
   Widget build(BuildContext context) {
+    final double keyboardHeight = MediaQuery.viewInsetsOf(context).bottom;
+    final bool barreVisible = keyboardHeight > 0;
+    const double barreHauteur = 48;
+
     return Scaffold(
-            
+
+      resizeToAvoidBottomInset: true,
       backgroundColor: const Color(0xFF393939),
-      body: SafeArea(
-        child: SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(40), // 16
-        child: Column(
-                    
+      body: Stack(
+        children: [
+          SafeArea(
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              padding: EdgeInsets.only(
+                bottom: barreVisible ? barreHauteur + 12 : 40,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(40), // 16
+                child: Column(
+
           children: [
 
             const SizedBox(height: 24),
@@ -143,7 +161,7 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
               children: [
 
               IconButton(
-              icon: const Icon(Icons.chevron_left, 
+              icon: const Icon(Icons.chevron_left,
               color: Colors.white,
               size: 30),
               onPressed: () {
@@ -168,20 +186,20 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
             const SizedBox(height: 24),
 
             Row(mainAxisAlignment: MainAxisAlignment.start,
-            
+
               children: [
-              _buildResult("Calories", calories, unit: "kcal")              
+              _buildResult("Calories", calories, unit: "kcal")
             ]
             ),
 
             const SizedBox(height: 20),
-            
+
             SizedBox(
               height: 1,
               width: 285,
               child: Container(
                 color: Color(0x3FFFFFFF),
-              )                            
+              )
             ),
 
             const SizedBox(height: 20),
@@ -194,93 +212,105 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
                 _buildResult("Glucides", glucides, unit: "g"),
               ],
             ),
-            
-            
 
-            const SizedBox(height: 24),
-            
-            Container(                      
-            width: 260,            
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.transparent,
-              border: Border.all(color: Color(0x3B000000)),
-              borderRadius: BorderRadius.circular(25),
-              ),
+            const SizedBox(height: 32),
 
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  
-                const Text("PORTION",
-                style: TextStyle(fontSize: 18,
-                fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 1.2,
-                    ),
-                ),
-                
-                const SizedBox(height: 16),
-                
-                Row(                  
-                  children: [ 
-                
-                Expanded(
-                  flex: 1,
-                  child: SizedBox( 
-                    height: champsQheight,
-                    width: 80,
-                    child: _buildQuantiteInput("", quantiteController),
-                ),
+            // Container PORTION dans le flux de la page
+            Center(
+              child: Container(
+                width: 260,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF393939),
+                  border: Border.all(color: Color(0x3B000000)),
+                  borderRadius: BorderRadius.circular(25),
                 ),
 
-                const SizedBox(width: 12),
-                
-                Expanded(
-                  flex: 2,
-                  child: SizedBox( 
-                    height: champsQheight,
-                    width: 125,                    
-                    child: _buildPortionDropdown(),
-                ),
-                ),
-                
-                ],
-                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
 
-                const SizedBox(height: 12),
-
-                //BOUTON DE VALIDATION
-                SizedBox(
-                  width: 222,
-                  height: 50,                              
-                child: ElevatedButton(
-                    
-                    onPressed: _validerModifications,
-                    
-                    style: ElevatedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15), // optionnel : coins arrondis
-                        ),
-                      
-                      backgroundColor: const Color(0xFF357E50),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                       
-                    ),
-                    child: const Text(
-                      "Ajouter",
-                      style: TextStyle(fontSize: 16,
-                      color: Colors.white),                      
+                  const Text("PORTION",
+                  style: TextStyle(fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 1.2,
                       ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  Row(
+                    children: [
+
+                  Expanded(
+                    flex: 1,
+                    child: SizedBox(
+                      height: champsQheight,
+                      width: 80,
+                      child: _buildQuantiteInput("", quantiteController),
+                  ),
+                  ),
+
+                  const SizedBox(width: 12),
+
+                  Expanded(
+                    flex: 2,
+                    child: SizedBox(
+                      height: champsQheight,
+                      width: 125,
+                      child: _buildPortionDropdown(),
+                  ),
+                  ),
+
+                  ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  //BOUTON DE VALIDATION
+                  SizedBox(
+                    width: 222,
+                    height: 50,
+                  child: ElevatedButton(
+
+                      onPressed: _validerModifications,
+
+                      style: ElevatedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15), // optionnel : coins arrondis
+                          ),
+
+                        backgroundColor: const Color(0xFF357E50),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+
+                      ),
+                      child: const Text(
+                        "Ajouter",
+                        style: TextStyle(fontSize: 16,
+                        color: Colors.white),
+                        ),
+                  ),
+                  ),
+                  ],
                 ),
-                ),
-                ],
-                ),
-              ),        
+              ),
+            ),
+
           ],
-        ),
-      ),
-      ),
+                ),
+              ),
+            ),
+          ),
+
+          if (barreVisible)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: _buildOperatorsBar(),
+            ),
+        ],
       ),
     );
   }
@@ -296,17 +326,17 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
         // Quand on quitte le champ
         if (controller.text.trim().isEmpty) {
           setState(() {
-            controller.text = quantite.toString(); // dernière valeur valide
+            controller.text = _fmtQty(quantite); // dernière valeur valide
           });
         }
       }
     },     
     
     child: TextField(
-      cursorHeight: champsQheight * 0.8,
-      cursorColor: Color(0xFF357E50),
+      cursorHeight: champsQheight / 2,
       controller: controller,
       keyboardType: TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+\-−×÷., ]'))],
       style: const TextStyle(color: Colors.white, fontSize: champsQfontSize),
       textAlign: TextAlign.right,
       textAlignVertical: TextAlignVertical.center,
@@ -314,7 +344,15 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
       // ✅ Quand l’utilisateur clique dans le champ, on efface la valeur
       onTap: () {
         controller.clear();
-        _buildOperatorsRow;
+        Future.delayed(const Duration(milliseconds: 350), () {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+            );
+          }
+        });
       },      
       
       onChanged: (value) {
@@ -374,11 +412,11 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
           child: Align(alignment: Alignment.centerLeft,
           child: Text((){
             if (p.nom.isEmpty) {
-            return 'Portion (${p.poids} g)';
+            return 'Portion (${p.poids.round()} g)';
             } else if (p.nom == 'g') {
-              return p.nom;              
+              return p.nom;
             } else {
-              return '${p.nom} (${p.poids} g)';
+              return '${p.nom} (${p.poids.round()} g)';
             }
 
             }(),
@@ -401,7 +439,7 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
             quantite = 1; // valeur par défaut pour les autres portions
           }
           
-          quantiteController.text = quantite.toString();
+          quantiteController.text = _fmtQty(quantite);
           _recalculerMacros(quantite);
         });
       
@@ -463,23 +501,83 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
     );
   }
 
-  Widget _buildOperatorsRow() {
-    final ops = ['+', '-', '*', '/'];
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children: ops.map((op) {
-        return ElevatedButton(
-          onPressed: () {
-            final text = quantiteController.text;
-            quantiteController.text = "$text$op";
-            quantiteController.selection = TextSelection.fromPosition(
-              TextPosition(offset: quantiteController.text.length),
-            );
-          },
-          child: Text(op),
-        );
-      }).toList(),
+  Widget _buildOperatorsBar() {
+    return Material(
+      color: const Color(0xFF2B2B2B),
+      child: SizedBox(
+        height: 48,
+        child: Row(
+          children: [
+            const Spacer(),
+            _opButton('+'),
+            _opButton('−'),
+            _opButton('×'),
+            _opButton('÷'),
+            Container(width: 1, color: const Color(0x88FFFFFF)),
+            SizedBox(
+              width: 64,
+              child: InkWell(
+                onTap: _evaluerExpression,
+                child: const Center(
+                  child: Text(
+                    '=',
+                    style: TextStyle(
+                      color: Color(0xFF357E50),
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
+  }
+
+  Widget _opButton(String symbole) {
+    return SizedBox(
+      width: 52,
+      child: InkWell(
+        onTap: () {
+          final texte = quantiteController.text.trimRight();
+          if (texte.isNotEmpty && _operateurs.contains(texte[texte.length - 1])) return;
+          quantiteController.text = '$texte $symbole ';
+          quantiteController.selection = TextSelection.fromPosition(
+            TextPosition(offset: quantiteController.text.length),
+          );
+        },
+        child: Center(
+          child: Text(
+            symbole,
+            style: const TextStyle(color: Colors.white, fontSize: 20),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _evaluerExpression() {
+    final text = quantiteController.text.trim();
+    if (text.isEmpty) return;
+    try {
+      final texteCalc = text.replaceAll('×', '*').replaceAll('÷', '/').replaceAll('−', '-');
+      final parser = ShuntingYardParser();
+      Expression exp = parser.parse(texteCalc);
+      ContextModel cm = ContextModel();
+      double resultat = exp.evaluate(EvaluationType.REAL, cm);
+      setState(() {
+        quantite = resultat;
+        quantiteController.text = _fmtQty(resultat);
+        quantiteController.selection = TextSelection.fromPosition(
+          TextPosition(offset: quantiteController.text.length),
+        );
+        _recalculerMacros(quantite);
+      });
+    } catch (e) {
+      // expression invalide, on ne fait rien
+    }
   }
 
 

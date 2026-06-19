@@ -1,6 +1,8 @@
 //import 'package:cal_track_v1/Pages/loading_screen.dart';
+import 'package:cal_track_v1/Pages/splash_transition.dart';
 import 'package:cal_track_v1/Pages/tableaudebord.dart';
 import 'package:cal_track_v1/models/user_data.dart';
+import 'package:cal_track_v1/services/local_storage_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 //import 'package:cal_track_v1/models/user_data.dart';
 //import 'package:cloud_firestore/cloud_firestore.dart';
@@ -21,6 +23,7 @@ class ConnexionPage extends StatefulWidget {
 class _ConnexionPageState extends State<ConnexionPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  TextEditingController? _autocompleteEmailController;
 
   List<String> _savedEmails = [];
 
@@ -28,15 +31,9 @@ class _ConnexionPageState extends State<ConnexionPage> {
   bool _obscurePassword = true; // état initial
   
   Future<void> saveUserDataLocally(UserModel user) async {
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setDouble('Poids', user.poids);
-  await prefs.setDouble('Taille', user.taille);
-  await prefs.setInt('Âge', user.age);
-  await prefs.setString('Sexe', user.sexe);
-  await prefs.setString('NiveauActivité', user.nActivite);
-  await prefs.setString('Sport', user.typeSport);
-  await prefs.setString('Objectif', user.objectif);
-  // await prefs.setString('Calories_Min', user.caloriesMin);
+  final userId = FirebaseAuth.instance.currentUser?.uid;
+  if (userId == null) return;
+  await LocalStorageService.saveUserData(userId, user);
   }
 
 
@@ -68,7 +65,8 @@ class _ConnexionPageState extends State<ConnexionPage> {
 
 
 Future<UserModel?> fetchUserData() async {
-  final userId = FirebaseAuth.instance.currentUser!.uid;
+  final userId = FirebaseAuth.instance.currentUser?.uid;
+  if (userId == null) return null;
 
   final userDoc = await FirebaseFirestore.instance
       .collection('users')
@@ -91,7 +89,7 @@ Future<UserModel?> fetchUserData() async {
   
   // SIGN IN
   Future<void> _resetPassword() async {
-    final email = _emailController.text.trim();
+    final email = (_autocompleteEmailController?.text ?? _emailController.text).trim();
     if (email.isEmpty) {
       setState(() => _errorMessage = "Entrez votre email pour réinitialiser le mot de passe.");
       return;
@@ -123,12 +121,13 @@ Future<UserModel?> fetchUserData() async {
 
   Future<void> _signIn() async {
     try {
+      final emailValue = (_autocompleteEmailController?.text ?? _emailController.text).trim();
       await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
+        email: emailValue,
         password: _passwordController.text.trim(),
       );
 
-      await _saveEmail(_emailController.text.trim()); // Sauvegarder l'email
+      await _saveEmail(emailValue); // Sauvegarder l'email
 
       final userData = await fetchUserData();
 
@@ -140,7 +139,7 @@ Future<UserModel?> fetchUserData() async {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => TableauDeBord()),
+        MaterialPageRoute(builder: (context) => const SplashTransition(destination: TableauDeBord())),
       );
       } else {
       setState(() {
@@ -188,7 +187,6 @@ final double fieldHeight = 40;
 static const double gap = 15;
 static const double arrondi = 10;
 
-final _emailFocusNode = FocusNode();
 final _passwordFocusNode = FocusNode();
 
   @override
@@ -216,7 +214,7 @@ final _passwordFocusNode = FocusNode();
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
-                  'Cal\' Track',
+                  'forkshot',
                   style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 
@@ -238,24 +236,23 @@ final _passwordFocusNode = FocusNode();
                             .contains(textEditingValue.text.toLowerCase()));
                       },
                       fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-                        _emailController.text = controller.text;
-                    
+                        _autocompleteEmailController = controller;
+
                     return TextField(
                       textAlignVertical: TextAlignVertical.center,
-                  controller: _emailController,
-                  focusNode: _emailFocusNode,
+                  controller: controller,
+                  focusNode: focusNode,
                   textInputAction: TextInputAction.next,
                   onEditingComplete: () {
-                    _emailFocusNode.unfocus();          // retire le focus du champ email
-                    FocusScope.of(context).requestFocus(_passwordFocusNode); // focus sur mot de passe
+                    focusNode.unfocus();
+                    FocusScope.of(context).requestFocus(_passwordFocusNode);
                   },           
                                     
-                  cursorColor: Color(0xFF357E50), // couleur du curseur
                   decoration: InputDecoration(
                     contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
                     filled: true,
                     fillColor: Color(0x0CFFFFFF),
-                    labelText: 'Email',
+                    labelText: 'votre@email.com',
                     labelStyle: const TextStyle(
                       color: Color(0x4CFFFFFF)), // Couleur du label quand le champ est **inactif**
                     floatingLabelStyle: const TextStyle(
@@ -269,7 +266,7 @@ final _passwordFocusNode = FocusNode();
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(arrondi),
-                        borderSide: BorderSide(color: Colors.grey.shade600),
+                        borderSide: BorderSide.none,
                         ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(arrondi),
@@ -280,7 +277,7 @@ final _passwordFocusNode = FocusNode();
                     );
                       },
                   onSelected: (String selection) {
-                        _emailController.text = selection;
+                        // L'Autocomplete met à jour son controller automatiquement
                       },
                   
                   optionsViewBuilder: (context, onSelected, options) {
@@ -323,7 +320,6 @@ final _passwordFocusNode = FocusNode();
                       
                       onEditingComplete: _signIn,
 
-                      cursorColor: Color(0xFF357E50), // couleur du curseur
                       obscureText: _obscurePassword, // 👈 lié à ton booléen
 
                       textInputAction: TextInputAction.done, // <-- permet d’afficher "Entrée/Done"
@@ -333,7 +329,7 @@ final _passwordFocusNode = FocusNode();
                     contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
                     filled: true,
                     fillColor: Color(0x0CFFFFFF),
-                    labelText: 'Mot de passe',
+                    labelText: 'motdepasse',
                     
                     labelStyle: const TextStyle(
                       color: Color(0x4CFFFFFF), // Couleur du label quand le champ est **inactif**
@@ -394,7 +390,7 @@ final _passwordFocusNode = FocusNode();
                     ),
                     enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(arrondi),
-                        borderSide: BorderSide(color: Colors.grey.shade600),
+                        borderSide: BorderSide.none,
                     ),
                     focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(arrondi),
@@ -419,22 +415,22 @@ final _passwordFocusNode = FocusNode();
     
                 
                 // SE CONNECTER
-                Center( 
-                  child : SizedBox( 
+                Center(
+                  child : SizedBox(
                     width: fieldWidth,
                     height: fieldHeight,
                   child : ElevatedButton(
-                  
+
                   onPressed: _signIn,
-                  
+
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 0),
                     backgroundColor: Color(0xFF357E50),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(arrondi)),
                   ),
                   child: const Text(
                     'Se connecter',
-                    style: TextStyle(fontSize: 16, color: Colors.white),
+                    style: TextStyle(fontSize: 14, color: Colors.white),
                   ),
                 ),
                   ),
@@ -483,13 +479,13 @@ final _passwordFocusNode = FocusNode();
                 const SizedBox(height: 25),
 
                 // PAS ENCORE DE COMPTE
-                Center(                  
+                Center(
                   child: SizedBox(
                     width: fieldWidth,
                     height: fieldHeight,
-                    
-                    child: 
-                    //const Text("Pas encore de compte ?"),                    
+
+                    child:
+                    //const Text("Pas encore de compte ?"),
                     ElevatedButton(
                       onPressed: () {
                         Navigator.push(
@@ -497,9 +493,9 @@ final _passwordFocusNode = FocusNode();
                           MaterialPageRoute(builder: (context) => const InscriptionPage()),
                         );
                       },
-                      
+
                       style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 0),
                         backgroundColor: (Colors.black),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(arrondi)),
                       

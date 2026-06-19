@@ -1,9 +1,7 @@
 import 'package:cal_track_v1/Pages/donnees_utilisateur.dart';
-//import 'package:cal_track_v1/Pages/tableaudebord.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-//import 'package:cal_track_v1/Pages/inscription_page.dart';
 
 class InscriptionPage extends StatefulWidget {
   const InscriptionPage({super.key});
@@ -21,6 +19,12 @@ class _InscriptionPageState extends State<InscriptionPage> {
 
   String? _errorMessage;
   bool _isLoading = false;
+  bool _obscurePassword = true;
+
+  static const double fieldWidth = 300;
+  static const double fieldHeight = 40;
+  static const double gap = 15;
+  static const double arrondi = 10;
 
   @override
   void dispose() {
@@ -39,97 +43,235 @@ class _InscriptionPageState extends State<InscriptionPage> {
       _isLoading = true;
     });
 
-    try { // Création de l'utilisateur avec email et mot de passe
+    try {
       final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
       );
-      
-      // Enregistrement de l'utilisateur dans Firestore
+
       await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
         'email': emailController.text.trim(),
         'nom': nomController.text.trim(),
-        'prenom': prenomController.text.trim(),        
+        'prenom': prenomController.text.trim(),
         'createdAt': Timestamp.now(),
       });
 
-      // Redirection vers le tableau de bord après succès
-      if (!mounted) return; // S'assurer que le widget est monté
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Compte créé avec succès")),
-      );
+      if (!mounted) return;
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const DonneesUtilisateurPage(fromInscription: true)),
-        );
-
+        MaterialPageRoute(builder: (_) => const DonneesUtilisateurPage(fromInscription: true)),
+      );
     } on FirebaseAuthException catch (e) {
-      setState(() => _errorMessage = e.message);
+      setState(() {
+        switch (e.code) {
+          case 'email-already-in-use':
+            _errorMessage = "Un compte existe déjà avec cet email.";
+            break;
+          case 'weak-password':
+            _errorMessage = "Mot de passe trop faible (6 caractères min.).";
+            break;
+          case 'invalid-email':
+            _errorMessage = "Adresse email invalide.";
+            break;
+          default:
+            _errorMessage = e.message ?? "Une erreur est survenue.";
+        }
+      });
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  InputDecoration _fieldDecoration(String label, IconData icon) {
+    return InputDecoration(
+      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
+      filled: true,
+      fillColor: const Color(0x0CFFFFFF),
+      labelText: label,
+      labelStyle: const TextStyle(color: Color(0x4CFFFFFF)),
+      floatingLabelStyle: const TextStyle(color: Colors.white),
+      prefixIcon: Icon(icon, color: const Color(0x80000000)),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(arrondi),
+        borderSide: const BorderSide(color: Color(0xFF357E50), width: 2),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(arrondi),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(arrondi),
+        borderSide: const BorderSide(color: Color(0xFF357E50), width: 2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(arrondi),
+        borderSide: const BorderSide(color: Colors.red, width: 1),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(arrondi),
+        borderSide: const BorderSide(color: Colors.red, width: 2),
+      ),
+      errorStyle: const TextStyle(color: Colors.red, fontSize: 11),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Inscription')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              if (_errorMessage != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12.0),
-                  child: Text(
-                    _errorMessage!,
-                    style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+      backgroundColor: const Color(0xFF393939),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Container(
+            width: fieldWidth,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFF393939),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: const [
+                BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 5)),
+              ],
+            ),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+
+                  // Bouton retour
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: const Icon(Icons.chevron_left, color: Colors.white, size: 28),
+                    ),
                   ),
-                ),
-              TextFormField(
-                controller: emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
-                keyboardType: TextInputType.emailAddress,
-                validator: (value) =>
-                    value == null || value.isEmpty ? 'Champ requis' : null,
+
+                  const SizedBox(height: 8),
+
+                  const Text(
+                    'Créer un compte',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Prénom
+                  SizedBox(
+                    width: fieldWidth,
+                    height: fieldHeight,
+                    child: TextFormField(
+                      controller: prenomController,
+                      textAlignVertical: TextAlignVertical.center,
+                      textCapitalization: TextCapitalization.words,
+
+                      style: const TextStyle(color: Colors.white),
+                      decoration: _fieldDecoration('Prénom', Icons.person_outline),
+                      validator: (v) => v == null || v.trim().isEmpty ? 'Champ requis' : null,
+                    ),
+                  ),
+
+                  const SizedBox(height: gap),
+
+                  // Nom
+                  SizedBox(
+                    width: fieldWidth,
+                    height: fieldHeight,
+                    child: TextFormField(
+                      controller: nomController,
+                      textAlignVertical: TextAlignVertical.center,
+                      textCapitalization: TextCapitalization.words,
+
+                      style: const TextStyle(color: Colors.white),
+                      decoration: _fieldDecoration('Nom', Icons.badge_outlined),
+                      validator: (v) => v == null || v.trim().isEmpty ? 'Champ requis' : null,
+                    ),
+                  ),
+
+                  const SizedBox(height: gap),
+
+                  // Email
+                  SizedBox(
+                    width: fieldWidth,
+                    height: fieldHeight,
+                    child: TextFormField(
+                      controller: emailController,
+                      textAlignVertical: TextAlignVertical.center,
+                      keyboardType: TextInputType.emailAddress,
+
+                      style: const TextStyle(color: Colors.white),
+                      decoration: _fieldDecoration('votre@email.com', Icons.email),
+                      validator: (v) => v == null || v.isEmpty ? 'Champ requis' : null,
+                    ),
+                  ),
+
+                  const SizedBox(height: gap),
+
+                  // Mot de passe
+                  SizedBox(
+                    width: fieldWidth,
+                    height: fieldHeight,
+                    child: TextFormField(
+                      controller: passwordController,
+                      textAlignVertical: TextAlignVertical.center,
+                      obscureText: _obscurePassword,
+
+                      style: const TextStyle(color: Colors.white),
+                      decoration: _fieldDecoration('motdepasse', Icons.lock).copyWith(
+                        suffixIcon: Listener(
+                          onPointerDown: (_) => setState(() => _obscurePassword = false),
+                          onPointerUp: (_) => setState(() => _obscurePassword = true),
+                          child: const Icon(Icons.visibility_outlined, color: Colors.grey, size: 18),
+                        ),
+                      ),
+                      validator: (v) => v != null && v.length < 6 ? '6 caractères minimum' : null,
+                    ),
+                  ),
+
+                  const SizedBox(height: gap + 4),
+
+                  // Message d'erreur
+                  if (_errorMessage != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        _errorMessage!,
+                        style: const TextStyle(color: Colors.red, fontSize: 13),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+
+                  // Bouton créer compte
+                  SizedBox(
+                    width: fieldWidth,
+                    height: fieldHeight,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _register,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF357E50),
+                        disabledBackgroundColor: const Color(0xFF357E50).withAlpha(120),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(arrondi)),
+                        padding: EdgeInsets.zero,
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              'Créer mon compte',
+                              style: TextStyle(fontSize: 14, color: Colors.white),
+                            ),
+                    ),
+                  ),
+                ],
               ),
-              TextFormField(
-                controller: passwordController,
-                decoration: const InputDecoration(labelText: 'Mot de passe'),
-                obscureText: true,
-                validator: (value) =>
-                    value != null && value.length < 6 ? '6 caractères min.' : null,
-              ),
-              TextFormField(
-                controller: nomController,
-                decoration: const InputDecoration(labelText: 'Nom'),
-                validator: (value) =>
-                    value == null || value.trim().isEmpty ? 'Champ requis' : null,
-              ),
-              TextFormField(
-                controller: prenomController,
-                decoration: const InputDecoration(labelText: 'Prénom'),
-                validator: (value) =>
-                    value == null || value.trim().isEmpty ? 'Champ requis' : null,
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _isLoading ? null : _register,
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Créer mon compte'),
-              ),
-            ],
+            ),
           ),
         ),
       ),

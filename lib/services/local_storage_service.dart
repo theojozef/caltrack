@@ -4,8 +4,6 @@ import 'package:cal_track_v1/models/user_data.dart';
 import 'package:cal_track_v1/models/aliment.dart';
 
 class LocalStorageService {
-  static const String _userKey = 'user_data';
-
   static Future<void> saveUserData(String userId, UserModel user) async {
     final prefs = await SharedPreferences.getInstance();
     //final jsonString = json.encode(user.toJson());
@@ -24,9 +22,9 @@ class LocalStorageService {
     
   }
 
-  Future<void> clearUserData() async {
+  static Future<void> clearUserData(String userId) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_userKey);
+    await prefs.remove('userData_$userId');
   }
 
   // Formate une date en "yyyy-MM-dd" pour les clés SharedPreferences
@@ -94,6 +92,19 @@ class LocalStorageService {
         .toList();
   }
 
+  static Future<void> saveRecentsQuantites(String userId, Map<String, Map<String, dynamic>> quantites) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('recentsQuantites_$userId', jsonEncode(quantites));
+  }
+
+  static Future<Map<String, Map<String, dynamic>>> loadRecentsQuantites(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonString = prefs.getString('recentsQuantites_$userId');
+    if (jsonString == null) return {};
+    final Map<String, dynamic> decoded = jsonDecode(jsonString);
+    return decoded.map((k, v) => MapEntry(k, Map<String, dynamic>.from(v as Map)));
+  }
+
   static Future<void> saveSliderValue(double value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('slider_value', value);
@@ -123,7 +134,7 @@ static Future<Map<String, double>?> loadMacros(String userId) async {
     'glucides_min', 'glucides_max',
     'fibres_min', 'fibres_max',
   ];
-  
+
   final result = <String, double>{};
   for (var key in keys) {
     final value = prefs.getDouble('macros_${userId}_$key');
@@ -131,6 +142,45 @@ static Future<Map<String, double>?> loadMacros(String userId) async {
     result[key] = value;
   }
   return result;
+}
+
+// Sauvegarde un snapshot figé des macros pour un jour passé (déclenchée au changement de journée)
+static Future<void> saveMacrosSnapshot(String userId, String date, Map<String, int> macros) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString('macros_snapshot_${userId}_$date', jsonEncode(macros));
+}
+
+// Charge les macros applicables à une date donnée :
+// 1. Snapshot exact du jour → 2. Snapshot le plus récent avant ce jour → 3. Macros courantes
+static Future<Map<String, double>?> loadMacrosForDate(String userId, String date) async {
+  final prefs = await SharedPreferences.getInstance();
+
+  final snapshotStr = prefs.getString('macros_snapshot_${userId}_$date');
+  if (snapshotStr != null) {
+    final Map<String, dynamic> decoded = jsonDecode(snapshotStr);
+    return decoded.map((k, v) => MapEntry(k, (v as num).toDouble()));
+  }
+
+  // Fallback : chercher le snapshot le plus récent avant cette date
+  final prefix = 'macros_snapshot_${userId}_';
+  final datesAvant = prefs
+      .getKeys()
+      .where((k) => k.startsWith(prefix))
+      .map((k) => k.replaceFirst(prefix, ''))
+      .where((d) => d.compareTo(date) < 0)
+      .toList()
+    ..sort((a, b) => b.compareTo(a)); // plus récent en premier
+
+  if (datesAvant.isNotEmpty) {
+    final closestStr = prefs.getString('$prefix${datesAvant.first}');
+    if (closestStr != null) {
+      final Map<String, dynamic> decoded = jsonDecode(closestStr);
+      return decoded.map((k, v) => MapEntry(k, (v as num).toDouble()));
+    }
+  }
+
+  // Aucun snapshot disponible : le caller décidera quoi afficher
+  return null;
 }
 
 
