@@ -10,7 +10,7 @@ plugins {
 
 android {
     namespace = "com.example.cal_track_v1"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     
     ndkVersion = "29.0.13599879"
 

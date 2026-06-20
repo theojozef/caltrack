@@ -417,7 +417,7 @@ class _ListeAlimentsPageState extends State<ListeAlimentsPage> {
 
   // Totaux caloriques et macros de tous les aliments en attente
   Map<String, double> _totauxEnAttente() {
-    double kcal = 0, prot = 0, lip = 0, gluc = 0;
+    double kcal = 0, prot = 0, lip = 0, gluc = 0, fibres = 0;
     for (final item in _alimentsEnAttente) {
       final a = item['aliment'] as Aliment;
       final q = item['quantite'] as double;
@@ -427,8 +427,9 @@ class _ListeAlimentsPageState extends State<ListeAlimentsPage> {
       prot += a.proteines * f;
       lip += a.lipides * f;
       gluc += a.glucides * f;
+      fibres += a.fibres * f;
     }
-    return {'kcal': kcal, 'prot': prot, 'lip': lip, 'gluc': gluc};
+    return {'kcal': kcal, 'prot': prot, 'lip': lip, 'gluc': gluc, 'fibres': fibres};
   }
 
   Widget _buildTotalBar() {
@@ -437,6 +438,7 @@ class _ListeAlimentsPageState extends State<ListeAlimentsPage> {
     final prot = t['prot']!.round();
     final lip = t['lip']!.round();
     final gluc = t['gluc']!.round();
+    final fibres = t['fibres']!.round();
     const sep = TextSpan(
       text: '  ·  ',
       style: TextStyle(color: Colors.white38, fontSize: 13),
@@ -478,6 +480,15 @@ class _ListeAlimentsPageState extends State<ListeAlimentsPage> {
           ),
           TextSpan(
             text: ' ${gluc}g',
+            style: const TextStyle(color: Colors.white54, fontSize: 13),
+          ),
+          sep,
+          const TextSpan(
+            text: 'F',
+            style: TextStyle(color: Color(0xFF9C8FD4), fontSize: 13, fontWeight: FontWeight.w700),
+          ),
+          TextSpan(
+            text: ' ${fibres}g',
             style: const TextStyle(color: Colors.white54, fontSize: 13),
           ),
         ],
@@ -554,7 +565,8 @@ static const double heightsearch = 35;
   // Carte d'aliment pour la liste de recherche et les récents.
   // useRecentsQty=true → badge et bouton "+" utilisent la dernière quantité enregistrée.
   Widget _buildAlimentCard(Aliment aliment, {bool useRecentsQty = false}) {
-    final hasPortion = aliment.portions.isNotEmpty;
+    final hasPortion = aliment.portions.isNotEmpty &&
+        !(aliment.portions.length == 1 && aliment.portions.first.poids == 100);
     final portion = hasPortion ? aliment.portions.first : null;
     final ratio = hasPortion ? portion!.poids / 100 : 1.0;
 
@@ -837,16 +849,6 @@ static const double heightsearch = 35;
                                         color: Colors.white,
                                         fontWeight: FontWeight.bold),
                                   ),
-                                  if (aliment.portions.isNotEmpty)
-                                    Text(
-                                      () {
-                                        final nomPortion = aliment.portions.first.nom.trim();
-                                        return nomPortion.isEmpty
-                                            ? 'Portion (${aliment.portions.first.poids} g)'
-                                            : '$nomPortion (${aliment.portions.first.poids} g)';
-                                      }(),
-                                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                                    ),
                                   const SizedBox(height: 4),
                                   Text(
                                     () {

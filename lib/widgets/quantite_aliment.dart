@@ -39,6 +39,7 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
   double? proteines;
   double? lipides;
   double? glucides;
+  double? fibres;
 
   Portion? portionChoisie;
   double quantite = 100;
@@ -46,14 +47,20 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
   // Portion spéciale pour "Grammes"
   late Portion portionGrammes;
 
-  List<Portion> get portionsAvecGrammes {
-    if (widget.aliment.portions.isEmpty) {
-    // Si aucune portion dans la base, on ne retourne que la portionGrammes
-    return [portionGrammes];
+  // Ignore une portion unique à 100g (identique au défaut grammes → doublon inutile)
+  List<Portion> get _portionsReelles {
+    if (widget.aliment.portions.length == 1 && widget.aliment.portions.first.poids == 100) {
+      return [];
+    }
+    return widget.aliment.portions;
   }
-  // Sinon, on retourne la portionGrammes + toutes les autres
-    return [portionGrammes, ...widget.aliment.portions];
-  }  
+
+  List<Portion> get portionsAvecGrammes {
+    if (_portionsReelles.isEmpty) {
+      return [portionGrammes];
+    }
+    return [portionGrammes, ..._portionsReelles];
+  }
 
 
   @override
@@ -63,14 +70,10 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
     // Portion spéciale "Grammes" pour entrée manuelle
     portionGrammes = Portion(nom: "g", poids: quantite);
 
-    if (widget.aliment.portions.isNotEmpty) {
-    // Ici tu choisis la première portion de la liste comme "par défaut"
-    portionChoisie = widget.aliment.portions.first;
-
-    // Quantité par défaut = 1 portion
+    if (_portionsReelles.isNotEmpty) {
+    portionChoisie = _portionsReelles.first;
     quantite = 1;
   } else {
-    // Si aucune portion : on met "Grammes" à 100g
     portionChoisie = portionGrammes;
     quantite = 100;
   }
@@ -92,6 +95,7 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
       proteines = (widget.aliment.proteines * quantite) / 100;
       lipides = (widget.aliment.lipides * quantite) / 100;
       glucides = (widget.aliment.glucides * quantite) / 100;
+      fibres = (widget.aliment.fibres * quantite) / 100;
     });
     } else {
       // Autres portions : 1 portion par défaut
@@ -101,6 +105,7 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
       proteines = (widget.aliment.proteines * portionPoids * quantite) / 100;
       lipides = (widget.aliment.lipides * portionPoids * quantite) / 100;
       glucides = (widget.aliment.glucides * portionPoids * quantite) / 100;
+      fibres = (widget.aliment.fibres * portionPoids * quantite) / 100;
     });
     }
   }
@@ -140,7 +145,9 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
 
       resizeToAvoidBottomInset: true,
       backgroundColor: const Color(0xFF393939),
-      body: Stack(
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Stack(
         children: [
           SafeArea(
             child: SingleChildScrollView(
@@ -149,67 +156,93 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
                 bottom: barreVisible ? barreHauteur + 12 : 40,
               ),
               child: Padding(
-                padding: const EdgeInsets.all(40), // 16
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
 
           children: [
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 24), //TOP ECRAN
 
             Row(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-
-              IconButton(
-              icon: const Icon(Icons.chevron_left,
-              color: Colors.white,
-              size: 30),
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              ),
-
-              Expanded(
-              child: Text(widget.aliment.nom.toUpperCase(),
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Colors.white,
-                  overflow: TextOverflow.ellipsis, // Ajoute "..." si ça dépasse
-                  ),
-                  softWrap: true, // Autorise le retour à la ligne
-                  maxLines: 2,
-                    ),
-                ),    // Nombre maximum de lignes (à ajuster)),
+                IconButton(
+                  icon: const Icon(Icons.chevron_left, color: Colors.white, size: 30),
+                  padding: EdgeInsets.zero,
+                  onPressed: () { Navigator.pop(context); },
+                ),
               ],
             ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 10), //entre chevron et nom aliment
 
-            Row(mainAxisAlignment: MainAxisAlignment.start,
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 260),
+                child: Text(
+                  widget.aliment.nom.toUpperCase(),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    color: Colors.white,
+                  ),
+                  softWrap: true,
+                  maxLines: 2,
+                ),
+              ),
+            ),
 
-              children: [
-              _buildResult("Calories", calories, unit: "kcal")
-            ]
+            const SizedBox(height: 18), //sous nom aliment
+
+            Center(
+              child: SizedBox(
+                width: 260,
+                child: Container(height: 1, color: const Color(0x3FFFFFFF)),
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            Center(
+              child: Column(
+                children: [
+                  Text(
+                    calories?.toStringAsFixed(0) ?? '0',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 52,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Text(
+                    "CALORIES • kcal",
+                    style: TextStyle(
+                      color: Color(0x88FFFFFF),
+                      fontSize: 11,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                ],
+              ),
             ),
 
             const SizedBox(height: 20),
 
-            SizedBox(
-              height: 1,
-              width: 285,
-              child: Container(
-                color: Color(0x3FFFFFFF),
-              )
+            Center(
+              child: SizedBox(
+                width: 260,
+                child: Container(height: 1, color: const Color(0x3FFFFFFF)),
+              ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 18), //au dessus macros
 
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 _buildResult("Protéines", proteines, unit: "g"),
                 _buildResult("Lipides", lipides, unit: "g"),
                 _buildResult("Glucides", glucides, unit: "g"),
+                _buildResult("Fibres", fibres, unit: "g"),
               ],
             ),
 
@@ -311,11 +344,12 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
               child: _buildOperatorsBar(),
             ),
         ],
+        ),
       ),
     );
   }
 
- 
+
   //CHAMPS QUANTITE
   Widget _buildQuantiteInput(String label, TextEditingController controller) {
     
@@ -427,7 +461,7 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
         );
       }).toList(),
       
-      onChanged: (Portion? nouvellePortion) {
+      onChanged: _portionsReelles.isEmpty ? null : (Portion? nouvellePortion) {
         
         if (nouvellePortion == null) return;        
         setState(() {
@@ -463,6 +497,9 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
           borderRadius: BorderRadius.circular(25),
         ),
       ),
+      icon: _portionsReelles.isEmpty
+          ? const SizedBox.shrink()
+          : const Icon(Icons.arrow_drop_down),
       dropdownColor: const Color(0xFF393939),
       style: const TextStyle(color: Colors.white),
       

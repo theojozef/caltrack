@@ -51,6 +51,17 @@ class GuidePage extends StatelessWidget {
                       MaterialPageRoute(builder: (_) => const AProposPage()),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  _NavButton(
+                    icon: Icons.palette_outlined,
+                    iconColor: const Color(0xFF9C8FD4),
+                    title: "Codes couleurs",
+                    subtitle: "Barres de progression et étiquettes macros",
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const CodesCouleursPage()),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -484,6 +495,228 @@ class AProposPage extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Page 4 : Codes couleurs ───────────────────────────────────────────────────
+
+class CodesCouleursPage extends StatelessWidget {
+  const CodesCouleursPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF393939),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildHeader(context),
+            Expanded(
+              child: ListView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+                children: const [
+                  _SectionCard(
+                    icon: Icons.bar_chart_rounded,
+                    iconColor: Color(0xFF0BE754),
+                    title: "Barres de progression",
+                    content: _BarresCouleurContent(),
+                  ),
+                  SizedBox(height: 14),
+                  _SectionCard(
+                    icon: Icons.label_outline_rounded,
+                    iconColor: Color(0xFF9C8FD4),
+                    title: "Étiquettes macros",
+                    content: _MacroChipContent(),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 16, 16, 14),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+          const SizedBox(width: 4),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Codes couleurs",
+                  style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700),
+                ),
+                Text(
+                  "Barres et étiquettes macros",
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BarresCouleurContent extends StatelessWidget {
+  const _BarresCouleurContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _BodyText("La couleur de chaque barre indique où vous en êtes par rapport à votre plage cible."),
+        SizedBox(height: 16),
+        _BarreLegende(
+          color: Color(0xFFBC8C56),
+          label: "En dessous",
+          description: "Apport inférieur à la borne minimale. Vous n'avez pas encore atteint votre cible basse.",
+        ),
+        SizedBox(height: 12),
+        _BarreLegende(
+          color: Color(0xFF0BE754),
+          label: "Dans la plage",
+          description: "Apport compris entre les deux bornes. C'est la zone idéale — aucune action requise.",
+        ),
+        SizedBox(height: 12),
+        _BarreLegende(
+          color: Color(0xFFBC5A56),
+          label: "Au-dessus",
+          description: "Apport supérieur à la borne maximale. La plage est dépassée pour cette journée.",
+        ),
+        SizedBox(height: 14),
+        _InfoBox("Les deux traits verticaux sur la barre indiquent les bornes min et max de votre plage cible. Le curseur rond indique votre position actuelle."),
+      ],
+    );
+  }
+}
+
+class _BarreLegende extends StatelessWidget {
+  final Color color;
+  final String label;
+  final String description;
+
+  const _BarreLegende({required this.color, required this.label, required this.description});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 36,
+          height: 18,
+          margin: const EdgeInsets.only(top: 2),
+          decoration: BoxDecoration(
+            color: color.withAlpha(80),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: color.withAlpha(160), width: 1.5),
+          ),
+          child: Center(
+            child: Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: TextStyle(color: color, fontSize: 13.5, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text(description, style: const TextStyle(color: Colors.white54, fontSize: 13, height: 1.45)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MacroChipContent extends StatelessWidget {
+  const _MacroChipContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _BodyText("Ces étiquettes apparaissent dans le récapitulatif d'ajout (barre au-dessus du bouton \"Enregistrer\") et dans les fiches aliments."),
+        SizedBox(height: 16),
+        _MacroLegende(letter: "kcal", color: Color(0xFF7FD4A0), label: "Calories", description: "Total énergétique en kilocalories."),
+        SizedBox(height: 10),
+        _MacroLegende(letter: "P", color: Colors.white, label: "Protéines", description: "Construction musculaire, enzymes, hormones (insuline, glucagon…), anticorps, transport de l'oxygène, structure de la peau, des ongles et des cheveux."),
+        SizedBox(height: 10),
+        _MacroLegende(letter: "L", color: Color(0xFFE8A838), label: "Lipides", description: "Les graisses alimentaires sont essentiels : hormones, absorption des vitamines A·D·E·K, structure de chaque cellule."),
+        SizedBox(height: 10),
+        _MacroLegende(letter: "G", color: Color(0xFF5B9BD5), label: "Glucides", description: "Sucres et amidon — principale source d'énergie."),
+        SizedBox(height: 10),
+        _MacroLegende(letter: "F", color: Color(0xFF9C8FD4), label: "Fibres", description: "Indigestibles, elles ralentissent l'absorption des glucides (régulation de la glycémie), nourrissent le microbiote intestinal, améliorent la satiété, le transit et réduisent le risque de maladies cardiovasculaires."),
+      ],
+    );
+  }
+}
+
+class _MacroLegende extends StatelessWidget {
+  final String letter;
+  final Color color;
+  final String label;
+  final String description;
+
+  const _MacroLegende({
+    required this.letter,
+    required this.color,
+    required this.label,
+    required this.description,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 36,
+          height: 26,
+          decoration: BoxDecoration(
+            color: color.withAlpha(28),
+            borderRadius: BorderRadius.circular(7),
+            border: Border.all(color: color.withAlpha(80), width: 1),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            letter,
+            style: TextStyle(color: color, fontSize: letter.length > 1 ? 10 : 14, fontWeight: FontWeight.w800),
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 2),
+              Text(description, style: const TextStyle(color: Colors.white54, fontSize: 13, height: 1.45)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

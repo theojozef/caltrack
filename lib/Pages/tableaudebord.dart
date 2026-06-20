@@ -21,8 +21,9 @@ import 'package:cal_track_v1/widgets/groupe_barre.dart';
 //import 'connexion_page.dart';
 //import 'package:shared_preferences/shared_preferences.dart';
 
+const double _espacementAliments = 8;
 
-class TableauDeBord extends StatefulWidget {    
+class TableauDeBord extends StatefulWidget {
   const TableauDeBord({super.key});  
   
   @override
@@ -958,7 +959,9 @@ Future<void> _initializeData() async {
                 ? Column(
                     children: [
                       const Divider(color: Color(0x18FFFFFF), height: 1),
+                      const SizedBox(height: _espacementAliments),
                       ...aliments.map(_buildAlimentTile),
+                      const SizedBox(height: _espacementAliments),
                     ],
                   )
                 : const SizedBox.shrink(),
@@ -1686,7 +1689,7 @@ class _SwipeableAlimentTileState extends State<_SwipeableAlimentTile>
                 child: Container(
                   width: _revealWidth,
                   color: const Color(0xFF4A4A4A),
-                  child: const Icon(Icons.close, color: Colors.red, size: 20),
+                  child: const Icon(Icons.delete_forever_rounded, color: Color.fromARGB(255, 0, 0, 0), size: 28),
                 ),
               ),
             ),
@@ -1699,98 +1702,98 @@ class _SwipeableAlimentTileState extends State<_SwipeableAlimentTile>
               onHorizontalDragEnd: _onDragEnd,
               child: Container(
                 color: const Color(0xFF4A4A4A),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                  titleAlignment: ListTileTitleAlignment.top,
-                  title: Text(
-                    a.aliment.nom,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
-                  ),
-                  subtitle: Transform.translate(
-                    offset: const Offset(0, -4),
-                    child: () {
-                      const hue = 151.0;
-                      const sat = 0.5;
-                      final couleurP = HSLColor.fromAHSL(1.0, hue, sat, 0.80).toColor();
-                      final couleurL = HSLColor.fromAHSL(1.0, hue, sat, 0.60).toColor();
-                      final couleurG = HSLColor.fromAHSL(1.0, hue, sat, 0.40).toColor();
-                      return Row(children: [
-                        _macroCell('kcal', macros['calories'], Colors.white, 50, isKcal: true), //58
-                        /*const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 0), //4
-                          
-                        ),*/
-                        SizedBox(width:5),
-                        Text('·', style: TextStyle(color: Colors.white38, fontSize: 30, height: 1)),
-                        SizedBox(width:5),
-                        _macroCell('P', macros['proteines'], couleurP, 35),
-                        SizedBox(width:5),
-                        Text('·', style: TextStyle(color: Colors.white38, fontSize: 30, height: 1)),
-                        SizedBox(width:5),
-                        _macroCell('L', macros['lipides'], couleurL, 35),
-                        SizedBox(width:5),
-                        Text('·', style: TextStyle(color: Colors.white38, fontSize: 30, height: 1)),
-                        SizedBox(width:5),
-                        _macroCell('G', macros['glucides'], couleurG, 35),
-                        SizedBox(width:5),
-                      ]);
-                    }(),
-                  ),
-                  trailing: PopupMenuButton<String>(
-                    padding: EdgeInsets.zero,
-                    color: const Color(0xFF4A4A4A),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    onSelected: (value) {
-                      if (value == 'custom') {
-                        widget.onModify();
-                      } else if (value == 'portion') {
-                        widget.onUpdateQuantite(a.aliment.portions.first.poids);
-                      } else {
-                        widget.onUpdateQuantite(double.parse(value));
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      if (a.aliment.portions.isNotEmpty) ...[
-                        () {
-                          final p = a.aliment.portions.first;
-                          return PopupMenuItem<String>(
-                            value: 'portion',
-                            child: Text(
-                              p.nom.isNotEmpty
-                                  ? '${p.nom} (${p.poids.toStringAsFixed(0)} g)'
-                                  : '${p.poids.toStringAsFixed(0)} g',
-                              style: const TextStyle(color: Colors.white),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: _espacementAliments),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              a.aliment.nom,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Colors.white, fontSize: 14),
                             ),
-                          );
-                        }(),
-                        const PopupMenuDivider(),
-                      ],
-                      const PopupMenuItem(value: '5',   child: Text('5 g',   style: TextStyle(color: Colors.white))),
-                      const PopupMenuItem(value: '10',  child: Text('10 g',  style: TextStyle(color: Colors.white))),
-                      const PopupMenuItem(value: '20',  child: Text('20 g',  style: TextStyle(color: Colors.white))),
-                      const PopupMenuItem(value: '50',  child: Text('50 g',  style: TextStyle(color: Colors.white))),
-                      const PopupMenuItem(value: '100', child: Text('100 g', style: TextStyle(color: Colors.white))),
-                      const PopupMenuItem(value: '150', child: Text('150 g', style: TextStyle(color: Colors.white))),
-                      const PopupMenuItem(value: 'custom', child: Icon(Icons.edit, color: Colors.white, size: 18)),
-                    ],
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
+                            const SizedBox(height: 2),
+                            () {
+                              const hue = 151.0;
+                              const sat = 0.5;
+                              final couleurP = HSLColor.fromAHSL(1.0, hue, sat, 0.80).toColor();
+                              final couleurL = HSLColor.fromAHSL(1.0, hue, sat, 0.60).toColor();
+                              final couleurG = HSLColor.fromAHSL(1.0, hue, sat, 0.40).toColor();
+                              return Row(children: [
+                                _macroCell('kcal', macros['calories'], Colors.white, 50, isKcal: true),
+                                const SizedBox(width: 8),
+                                _macroCell('P', macros['proteines'], couleurP, 35),
+                                const SizedBox(width: 8),
+                                _macroCell('L', macros['lipides'], couleurL, 35),
+                                const SizedBox(width: 8),
+                                _macroCell('G', macros['glucides'], couleurG, 35),
+                              ]);
+                            }(),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      PopupMenuButton<String>(
+                        padding: EdgeInsets.zero,
                         color: const Color(0xFF4A4A4A),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF357E50)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        onSelected: (value) {
+                          if (value == 'custom') {
+                            widget.onModify();
+                          } else if (value == 'portion') {
+                            widget.onUpdateQuantite(a.aliment.portions.first.poids);
+                          } else {
+                            widget.onUpdateQuantite(double.parse(value));
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          if (a.aliment.portions.isNotEmpty) ...[
+                            () {
+                              final p = a.aliment.portions.first;
+                              return PopupMenuItem<String>(
+                                value: 'portion',
+                                child: Text(
+                                  p.nom.isNotEmpty
+                                      ? '${p.nom} (${p.poids.toStringAsFixed(0)} g)'
+                                      : '${p.poids.toStringAsFixed(0)} g',
+                                  style: const TextStyle(color: Colors.white),
+                                ),
+                              );
+                            }(),
+                            const PopupMenuDivider(),
+                          ],
+                          const PopupMenuItem(value: '5',   child: Text('5 g',   style: TextStyle(color: Colors.white))),
+                          const PopupMenuItem(value: '10',  child: Text('10 g',  style: TextStyle(color: Colors.white))),
+                          const PopupMenuItem(value: '20',  child: Text('20 g',  style: TextStyle(color: Colors.white))),
+                          const PopupMenuItem(value: '50',  child: Text('50 g',  style: TextStyle(color: Colors.white))),
+                          const PopupMenuItem(value: '100', child: Text('100 g', style: TextStyle(color: Colors.white))),
+                          const PopupMenuItem(value: '150', child: Text('150 g', style: TextStyle(color: Colors.white))),
+                          const PopupMenuItem(value: 'custom', child: Icon(Icons.edit, color: Colors.white, size: 18)),
+                        ],
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF4A4A4A),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF357E50)),
+                          ),
+                          child: Text(
+                            '${a.quantite.toStringAsFixed(0)} g',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500),
+                          ),
+                        ),
                       ),
-                      child: Text(
-                        '${a.quantite.toStringAsFixed(0)} g',
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500),
-                      ),
-                    ),
+                    ],
                   ),
                 ),
               ),

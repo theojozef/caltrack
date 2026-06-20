@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:cal_track_v1/models/aliment.dart';
 import 'package:cal_track_v1/widgets/quantite_aliment.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -13,7 +14,17 @@ class ScanPage extends StatefulWidget {
 }
 
 class _ScanPageState extends State<ScanPage> {
+  static const double _scanFrameWidth = 280;
+
   bool _isProcessing = false;
+  bool _torchEnabled = false;
+  final MobileScannerController _controller = MobileScannerController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   Future<Aliment?> _fetchFromOpenFoodFacts(String code) async {
     try {
@@ -108,6 +119,7 @@ class _ScanPageState extends State<ScanPage> {
     final code = capture.barcodes.firstOrNull?.rawValue;
     if (code == null) return;
 
+    HapticFeedback.mediumImpact();
     setState(() => _isProcessing = true);
 
     final aliment = await _fetchFromOpenFoodFacts(code);
@@ -156,16 +168,84 @@ class _ScanPageState extends State<ScanPage> {
 
   @override
   Widget build(BuildContext context) {
+    final topPadding = MediaQuery.of(context).padding.top;
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF393939),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF393939),
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text('Scanner un produit', style: TextStyle(color: Colors.white)),
-      ),
       body: Stack(
         children: [
-          MobileScanner(onDetect: _onDetect),
+          MobileScanner(controller: _controller, onDetect: _onDetect),
+          // Cadre de visée — centre écran
+          Center(
+            child: Container(
+              width: _scanFrameWidth,
+              height: 140,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.white, width: 2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          // Croix retour — haut droite
+          Positioned(
+            top: topPadding + 16,
+            right: 16,
+            child: GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.close, color: Colors.white, size: 28),
+              ),
+            ),
+          ),
+          // Bouton flash — bas droite
+          Positioned(
+            bottom: bottomPadding + 32,
+            right: 24,
+            child: GestureDetector(
+              onTap: () async {
+                await _controller.toggleTorch();
+                setState(() => _torchEnabled = !_torchEnabled);
+              },
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  _torchEnabled ? Icons.flashlight_on_rounded : Icons.flashlight_off_rounded,
+                  color: _torchEnabled ? const Color.fromARGB(255, 255, 219, 59) : Colors.white,
+                  size: 28,
+                ),
+              ),
+            ),
+          ),
+          // Texte d'instruction — quart bas de l'écran
+          Positioned(
+            bottom: MediaQuery.of(context).size.height / 4,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: SizedBox(
+                width: _scanFrameWidth - 24,
+                child: const Text(
+                  'Placez un code-barres dans le cadre pour le scanner',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    shadows: [Shadow(color: Colors.black, blurRadius: 8)],
+                  ),
+                ),
+              ),
+            ),
+          ),
           if (_isProcessing)
             const Center(
               child: CircularProgressIndicator(color: Color(0xFF357E50)),
