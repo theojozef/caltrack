@@ -41,7 +41,7 @@ class _PolicyContent extends StatelessWidget {
         _Section(
           title: 'Données collectées',
           body:
-              '• Identité : prénom, nom\n'
+              '• Identité : prénom\n'
               '• Coordonnées : adresse e-mail\n'
               '• Données de santé : informations nutritionnelles et caloriques saisies dans l\'application',
         ),
