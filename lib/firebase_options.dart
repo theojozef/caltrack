@@ -52,7 +52,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyB15SBhbqw1HHMq7h70uRRenzMSvRI761U',
-    appId: '1:474981035295:android:d7d5a6651bcf9de703142a',
+    appId: '1:474981035295:android:cb1b02377004902103142a',
     messagingSenderId: '474981035295',
     projectId: 'cal-track-55d37',
     storageBucket: 'cal-track-55d37.firebasestorage.app',

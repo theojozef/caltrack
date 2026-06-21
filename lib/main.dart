@@ -15,27 +15,16 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Forcer l'orientation portrait uniquement
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    // DeviceOrientation.portraitDown, // optionnel si vous voulez autoriser le portrait inversé
-  ]);
-    
   await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,  // Initialisation de Firebase avec le fichier options
+    options: DefaultFirebaseOptions.currentPlatform,
   );
-
-  // Mode immersif : contenu derrière la barre de statut et de navigation
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,              // barre heure/batterie transparente
-    statusBarIconBrightness: Brightness.light,       // icônes blanches (fond sombre)
-    systemNavigationBarColor: Colors.transparent,    // barre de navigation Android transparente
-    systemNavigationBarIconBrightness: Brightness.light,
+    statusBarColor: Colors.transparent,
+    systemNavigationBarColor: Colors.transparent,
   ));
-  
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {

@@ -354,7 +354,24 @@ child: PopScope(
             children: [
               
               SizedBox(height: MediaQuery.of(context).size.height * pctScreen),
-              
+
+              const SizedBox(height: gap),
+              Row(
+                children: [
+                  const Icon(Icons.account_circle, color: Colors.white70, size: 32),
+                  const SizedBox(width: 10),
+                  Text(
+                    FirebaseAuth.instance.currentUser?.displayName ?? '',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: gap),
+
               if (_errorMessage != null)
                 Text(
                   _errorMessage!,

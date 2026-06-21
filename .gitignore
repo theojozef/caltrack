@@ -47,3 +47,8 @@ app.*.map.json
 # Outils locaux — ne pas versionner
 .claude/
 devtools_options.yaml
+
+# Signing — ne jamais versionner
+android/key.properties
+*.jks
+*.keystore
