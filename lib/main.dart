@@ -52,6 +52,10 @@ class MyApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           theme: ThemeData(
             primarySwatch: Colors.green,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF357E50),
+              primary: const Color(0xFF357E50),
+            ),
             textSelectionTheme: const TextSelectionThemeData(
               selectionColor: Color(0x80357E50),
               selectionHandleColor: Color(0xFF357E50),

@@ -112,7 +112,7 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
 
   void _validerModifications() {
     Navigator.pop(context, {
-      'quantite': double.tryParse(quantiteController.text) ?? 100,
+      'quantite': quantite,
       'portionChoisie': portionChoisie,  // Ajout de la quantité
       //'calories': calories ?? 0,
       //'proteines': proteines ?? 0,
@@ -123,7 +123,7 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
   
   // VARIABLES
   static const double champsQheight = 31;
-  static const double champsQfontSize = 12;
+  static const double champsQfontSize = 14;
   static const Set<String> _operateurs = {'+', '−', '×', '÷'};
 
   @override
@@ -438,7 +438,8 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
   //CHAMPS PORTION
   Widget _buildPortionDropdown() {
     return DropdownButtonFormField<Portion>(
-      value: portionChoisie,      
+      isExpanded: true,
+      value: portionChoisie,
       items: portionsAvecGrammes.map((p) {
         return DropdownMenuItem<Portion>(
           value: p,
@@ -455,6 +456,7 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
 
             }(),
             style: const TextStyle(color: Colors.white, fontSize: champsQfontSize),
+            overflow: TextOverflow.ellipsis,
           ),
           ),
 
@@ -518,8 +520,8 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
         Text(
         label,
         style: const TextStyle(
-          color: Colors.white, 
-          fontSize: 11,
+          color: Colors.white,
+          fontSize: 13,
           fontWeight: FontWeight.bold
           ),
         ),
@@ -527,8 +529,8 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
         Text(
         "${value?.toStringAsFixed(1) ?? '0'} $unit",
         style: const TextStyle(
-          color: Color(0xBAFFFFFF), 
-          fontSize: 11          
+          color: Color(0xBAFFFFFF),
+          fontSize: 13
         ),
         ),      
       ],

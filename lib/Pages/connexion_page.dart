@@ -102,9 +102,9 @@ Future<UserModel?> fetchUserData() async {
         builder: (_) => AlertDialog(
           backgroundColor: const Color(0xFF393939),
           title: const Text("Email envoyé", style: TextStyle(color: Colors.white)),
-          content: Text(
-            "Un lien de réinitialisation a été envoyé à $email.",
-            style: const TextStyle(color: Colors.white70),
+          content: const Text(
+            "Si un compte est associé à cette adresse, un email de réinitialisation vient d'être envoyé. Pensez à vérifier vos spam.",
+            style: TextStyle(color: Colors.white70),
           ),
           actions: [
             TextButton(
@@ -114,12 +114,13 @@ Future<UserModel?> fetchUserData() async {
           ],
         ),
       );
-    } on FirebaseAuthException catch (e) {
-      setState(() => _errorMessage = e.message ?? "Erreur lors de l'envoi.");
+    } on FirebaseAuthException catch (_) {
+      setState(() => _errorMessage = "Erreur lors de l'envoi. Réessayez dans quelques instants.");
     }
   }
 
   Future<void> _signIn() async {
+    setState(() => _errorMessage = null);
     try {
       final emailValue = (_autocompleteEmailController?.text ?? _emailController.text).trim();
       await FirebaseAuth.instance.signInWithEmailAndPassword(
@@ -148,22 +149,21 @@ Future<UserModel?> fetchUserData() async {
     }
 
     } on FirebaseAuthException catch (e) {
-      
-      setState(() {
-          switch (e.code) {
-    case 'user-not-found':
-      _errorMessage = "Aucun compte trouvé avec cet email.";
-      break;
-    case 'wrong-password':
-      _errorMessage = "Mot de passe incorrect.";
-      break;
-    case 'invalid-email':
-      _errorMessage = "Adresse email invalide.";
-      break;
-    default:
-      _errorMessage = e.message ?? 'Une erreur est survenue.';
-  }
-      });
+      final String message;
+      switch (e.code) {
+        case 'user-not-found':
+          message = "Aucun profil trouvé pour cette adresse. Vérifiez l'orthographe ou créez un nouveau compte.";
+          break;
+        case 'wrong-password':
+          message = "mot de passe incorrect";
+          break;
+        case 'invalid-email':
+          message = "Adresse email invalide.";
+          break;
+        default:
+          message = 'email ou mot de passe incorrect';
+      }
+      setState(() => _errorMessage = message);
     }
   }
 
@@ -182,7 +182,6 @@ Future<UserModel?> fetchUserData() async {
     }
   }
 
-final double fieldWidth = 300;
 final double fieldHeight = 40;
 static const double gap = 15;
 static const double arrondi = 10;
@@ -191,26 +190,13 @@ final _passwordFocusNode = FocusNode();
 
   @override
   Widget build(BuildContext context) {
+    final double fieldWidth = MediaQuery.of(context).size.width * 0.85;
     return Scaffold(
       backgroundColor: const Color(0xFF393939), // Couleur de fond personnalisée
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
-          child: Container(
-            width: fieldWidth,
-            padding: const EdgeInsets.all(24.0),
-            decoration: BoxDecoration(
-              color: const Color(0xFF393939),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 10,
-                  offset: Offset(0, 5),
-                ),
-              ],
-            ),
-            child: Column(
+          child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
@@ -409,6 +395,7 @@ final _passwordFocusNode = FocusNode();
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Text(
                       _errorMessage!,
+                      textAlign: TextAlign.center,
                       style: const TextStyle(color: Colors.red),
                     ),
                   ),
@@ -448,7 +435,9 @@ final _passwordFocusNode = FocusNode();
                 const SizedBox(height: 10),
 
                 //OU
-                Row(
+                SizedBox(
+                  width: MediaQuery.of(context).size.width * 0.85,
+                  child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     
@@ -475,7 +464,8 @@ final _passwordFocusNode = FocusNode();
 
                   ]
                 ),
-                
+                ),
+
                 const SizedBox(height: 25),
 
                 // PAS ENCORE DE COMPTE
@@ -517,7 +507,6 @@ final _passwordFocusNode = FocusNode();
             ),
           ),
         ),
-      ),
     );
   }
 }

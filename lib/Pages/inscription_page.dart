@@ -1,4 +1,5 @@
 import 'package:cal_track_v1/Pages/donnees_utilisateur.dart';
+import 'package:cal_track_v1/Pages/politique_confidentialite_page.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -14,29 +15,37 @@ class _InscriptionPageState extends State<InscriptionPage> {
   final _formKey = GlobalKey<FormState>();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
-  final nomController = TextEditingController();
-  final prenomController = TextEditingController();
+final prenomController = TextEditingController();
 
   String? _errorMessage;
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _acceptedPrivacy = false;
 
-  static const double fieldWidth = 300;
   static const double fieldHeight = 40;
   static const double gap = 15;
   static const double arrondi = 10;
+
+  bool get _canSubmit =>
+      prenomController.text.trim().isNotEmpty &&
+emailController.text.trim().isNotEmpty &&
+      passwordController.text.length >= 6 &&
+      _acceptedPrivacy;
 
   @override
   void dispose() {
     emailController.dispose();
     passwordController.dispose();
-    nomController.dispose();
-    prenomController.dispose();
+prenomController.dispose();
     super.dispose();
   }
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!_acceptedPrivacy) {
+      setState(() => _errorMessage = "Veuillez accepter la politique de confidentialité.");
+      return;
+    }
 
     setState(() {
       _errorMessage = null;
@@ -51,7 +60,6 @@ class _InscriptionPageState extends State<InscriptionPage> {
 
       await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
         'email': emailController.text.trim(),
-        'nom': nomController.text.trim(),
         'prenom': prenomController.text.trim(),
         'createdAt': Timestamp.now(),
       });
@@ -118,40 +126,48 @@ class _InscriptionPageState extends State<InscriptionPage> {
 
   @override
   Widget build(BuildContext context) {
+    final double fieldWidth = MediaQuery.of(context).size.width * 0.85;
     return Scaffold(
       backgroundColor: const Color(0xFF393939),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Container(
-            width: fieldWidth,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: const Color(0xFF393939),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: const [
-                BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 5)),
-              ],
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF393939),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.chevron_left, color: Colors.white, size: 28),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const SizedBox(height: 120),
+          Center(
+            child: Container(
+              width: 18,
+              height: 63,
+              decoration: BoxDecoration(
+                color: const Color(0x32D9D9D9),
+                borderRadius: BorderRadius.circular(36),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 2, offset: Offset(-2, 2)),
+                ],
+              ),
             ),
-            child: Form(
-              key: _formKey,
+          ),
+          const SizedBox(height: 40),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-
-                  // Bouton retour
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: const Icon(Icons.chevron_left, color: Colors.white, size: 28),
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
+                Form(
+                key: _formKey,
+                child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
 
                   const Text(
-                    'Créer un compte',
+                    'Nouveau profil',
                     style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
 
@@ -165,26 +181,9 @@ class _InscriptionPageState extends State<InscriptionPage> {
                       controller: prenomController,
                       textAlignVertical: TextAlignVertical.center,
                       textCapitalization: TextCapitalization.words,
-
+                      onChanged: (_) => setState(() {}),
                       style: const TextStyle(color: Colors.white),
                       decoration: _fieldDecoration('Prénom', Icons.person_outline),
-                      validator: (v) => v == null || v.trim().isEmpty ? 'Champ requis' : null,
-                    ),
-                  ),
-
-                  const SizedBox(height: gap),
-
-                  // Nom
-                  SizedBox(
-                    width: fieldWidth,
-                    height: fieldHeight,
-                    child: TextFormField(
-                      controller: nomController,
-                      textAlignVertical: TextAlignVertical.center,
-                      textCapitalization: TextCapitalization.words,
-
-                      style: const TextStyle(color: Colors.white),
-                      decoration: _fieldDecoration('Nom', Icons.badge_outlined),
                       validator: (v) => v == null || v.trim().isEmpty ? 'Champ requis' : null,
                     ),
                   ),
@@ -199,7 +198,7 @@ class _InscriptionPageState extends State<InscriptionPage> {
                       controller: emailController,
                       textAlignVertical: TextAlignVertical.center,
                       keyboardType: TextInputType.emailAddress,
-
+                      onChanged: (_) => setState(() {}),
                       style: const TextStyle(color: Colors.white),
                       decoration: _fieldDecoration('votre@email.com', Icons.email),
                       validator: (v) => v == null || v.isEmpty ? 'Champ requis' : null,
@@ -216,7 +215,7 @@ class _InscriptionPageState extends State<InscriptionPage> {
                       controller: passwordController,
                       textAlignVertical: TextAlignVertical.center,
                       obscureText: _obscurePassword,
-
+                      onChanged: (_) => setState(() {}),
                       style: const TextStyle(color: Colors.white),
                       decoration: _fieldDecoration('motdepasse', Icons.lock).copyWith(
                         suffixIcon: Listener(
@@ -230,6 +229,66 @@ class _InscriptionPageState extends State<InscriptionPage> {
                   ),
 
                   const SizedBox(height: gap + 4),
+
+                  // Politique de confidentialité
+                  SizedBox(
+                    width: fieldWidth,
+                    child: Padding(
+                    padding: const EdgeInsets.only(left: 12),
+                    child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: Checkbox(
+                          value: _acceptedPrivacy,
+                          onChanged: (v) => setState(() {
+                            _acceptedPrivacy = v ?? false;
+                            if (_acceptedPrivacy) _errorMessage = null;
+                          }),
+                          activeColor: const Color(0xFF357E50),
+                          side: const BorderSide(color: Colors.white38),
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: RichText(
+                          text: TextSpan(
+                            style: const TextStyle(color: Colors.white54, fontSize: 12),
+                            children: [
+                              const TextSpan(text: "J'accepte la "),
+                              WidgetSpan(
+                                alignment: PlaceholderAlignment.middle,
+                                child: GestureDetector(
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const PolitiqueConfidentialitePage(),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'politique de confidentialité',
+                                    style: TextStyle(
+                                      color: Color.fromARGB(255, 93, 211, 136),
+                                      fontSize: 12,
+                                      decoration: TextDecoration.underline,
+                                      decorationColor: Color(0xFF357E50),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  ),
+                  ),
+
+                  const SizedBox(height: 20),
 
                   // Message d'erreur
                   if (_errorMessage != null)
@@ -247,10 +306,10 @@ class _InscriptionPageState extends State<InscriptionPage> {
                     width: fieldWidth,
                     height: fieldHeight,
                     child: ElevatedButton(
-                      onPressed: _isLoading ? null : _register,
+                      onPressed: (_canSubmit && !_isLoading) ? _register : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF357E50),
-                        disabledBackgroundColor: const Color(0xFF357E50).withAlpha(120),
+                        disabledBackgroundColor: const Color(0xFF6E6E6E),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(arrondi)),
                         padding: EdgeInsets.zero,
                       ),
@@ -272,8 +331,26 @@ class _InscriptionPageState extends State<InscriptionPage> {
                 ],
               ),
             ),
+                const SizedBox(height: 40),
+                Center(
+                  child: Container(
+                    width: 18,
+                    height: 63,
+                    decoration: BoxDecoration(
+                      color: const Color(0x32D9D9D9),
+                      borderRadius: BorderRadius.circular(36),
+                      boxShadow: const [
+                        BoxShadow(color: Colors.black26, blurRadius: 2, offset: Offset(-2, 2)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 40),
+                ],
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

@@ -175,15 +175,34 @@ class _ScanPageState extends State<ScanPage> {
       body: Stack(
         children: [
           MobileScanner(controller: _controller, onDetect: _onDetect),
-          // Cadre de visée — centre écran
+          // Cadre de visée + texte — centre écran
           Center(
-            child: Container(
-              width: _scanFrameWidth,
-              height: 140,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.white, width: 2),
-                borderRadius: BorderRadius.circular(12),
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: _scanFrameWidth,
+                  height: 140,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.white, width: 2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                const SizedBox(height: 15),
+                SizedBox(
+                  width: _scanFrameWidth - 24,
+                  child: const Text(
+                    'Placez un code-barres dans le cadre pour le scanner',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      shadows: [Shadow(color: Colors.black, blurRadius: 8)],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           // Croix retour — haut droite
@@ -221,27 +240,6 @@ class _ScanPageState extends State<ScanPage> {
                   _torchEnabled ? Icons.flashlight_on_rounded : Icons.flashlight_off_rounded,
                   color: _torchEnabled ? const Color.fromARGB(255, 255, 219, 59) : Colors.white,
                   size: 28,
-                ),
-              ),
-            ),
-          ),
-          // Texte d'instruction — quart bas de l'écran
-          Positioned(
-            bottom: MediaQuery.of(context).size.height / 4,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: SizedBox(
-                width: _scanFrameWidth - 24,
-                child: const Text(
-                  'Placez un code-barres dans le cadre pour le scanner',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    shadows: [Shadow(color: Colors.black, blurRadius: 8)],
-                  ),
                 ),
               ),
             ),
