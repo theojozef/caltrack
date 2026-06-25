@@ -511,7 +511,7 @@ Future<void> _initializeData() async {
     MaterialPageRoute(
       builder: (_) => QuantiteAliment(
         aliment: alimentConsomme.aliment,
-           // passer la portion initiale
+        quantiteInitiale: alimentConsomme.quantite,
       ),
     ),
   );
@@ -674,7 +674,7 @@ Future<void> _initializeData() async {
   }
 
 
-  static const double gap = 40; // 40
+  static const double gap = 35; // 40
   static const double ajustBoutonheight = 30; // 30
   static const double topBarH = 85; // 85
   static const double ajustBoutonWidth = 50; // 50
@@ -909,6 +909,8 @@ Future<void> _initializeData() async {
                     children: [
                       Text(
                         label,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -1733,6 +1735,10 @@ class _SwipeableAlimentTileState extends State<_SwipeableAlimentTile>
                                 _macroCell('L', macros['lipides'], couleurL, 35),
                                 const SizedBox(width: 8),
                                 _macroCell('G', macros['glucides'], couleurG, 35),
+                                if ((macros['fibres'] ?? 0) > 0) ...[
+                                  const SizedBox(width: 8),
+                                  _macroCell('F', macros['fibres'], const Color(0xFF9C8FD4), 35),
+                                ],
                               ]);
                             }(),
                           ],
@@ -1747,6 +1753,8 @@ class _SwipeableAlimentTileState extends State<_SwipeableAlimentTile>
                         onSelected: (value) {
                           if (value == 'custom') {
                             widget.onModify();
+                          } else if (value == 'delete') {
+                            widget.onDelete();
                           } else if (value == 'portion') {
                             widget.onUpdateQuantite(a.aliment.portions.first.poids);
                           } else {
@@ -1776,6 +1784,8 @@ class _SwipeableAlimentTileState extends State<_SwipeableAlimentTile>
                           const PopupMenuItem(value: '100', child: Text('100 g', style: TextStyle(color: Colors.white))),
                           const PopupMenuItem(value: '150', child: Text('150 g', style: TextStyle(color: Colors.white))),
                           const PopupMenuItem(value: 'custom', child: Icon(Icons.edit, color: Colors.white, size: 18)),
+                          const PopupMenuDivider(),
+                          const PopupMenuItem(value: 'delete', child: Text('Supprimer', style: TextStyle(color: Colors.redAccent))),
                         ],
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

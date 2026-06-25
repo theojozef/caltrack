@@ -11,6 +11,8 @@ class QuantiteAliment extends StatefulWidget {
   //final double lipides;
   //final double glucides;
   final Aliment aliment;
+  final double? quantiteInitiale;
+  final Portion? portionInitiale;
 
   const QuantiteAliment({
     super.key,
@@ -20,7 +22,9 @@ class QuantiteAliment extends StatefulWidget {
     //required this.lipides,
     //required this.glucides,
     required this.aliment,
-  }); 
+    this.quantiteInitiale,
+    this.portionInitiale,
+  });
 
   @override
   State<QuantiteAliment> createState() => _QuantiteAlimentState();
@@ -68,16 +72,26 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
     super.initState();
 
     // Portion spéciale "Grammes" pour entrée manuelle
-    portionGrammes = Portion(nom: "g", poids: quantite);
+    portionGrammes = Portion(nom: "g", poids: 100);
 
-    if (_portionsReelles.isNotEmpty) {
-    portionChoisie = _portionsReelles.first;
-    quantite = 1;
-  } else {
-    portionChoisie = portionGrammes;
-    quantite = 100;
-  }
-    
+    // Appliquer les valeurs initiales si fournies (mode édition)
+    if (widget.portionInitiale != null && widget.portionInitiale!.nom != 'g') {
+      final match = _portionsReelles.where((p) =>
+        p.nom == widget.portionInitiale!.nom && p.poids == widget.portionInitiale!.poids
+      ).firstOrNull;
+      portionChoisie = match ?? (_portionsReelles.isNotEmpty ? _portionsReelles.first : portionGrammes);
+      quantite = widget.quantiteInitiale ?? 1;
+    } else if (widget.quantiteInitiale != null) {
+      portionChoisie = portionGrammes;
+      quantite = widget.quantiteInitiale!;
+    } else if (_portionsReelles.isNotEmpty) {
+      portionChoisie = _portionsReelles.first;
+      quantite = 1;
+    } else {
+      portionChoisie = portionGrammes;
+      quantite = 100;
+    }
+
     // Init du contrôleur avec la quantité par défaut
     quantiteController = TextEditingController(text: _fmtQty(quantite));
     quantiteFocusNode = FocusNode(); // ✅ init

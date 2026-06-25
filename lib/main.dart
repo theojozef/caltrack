@@ -57,6 +57,18 @@ class MyApp extends StatelessWidget {
               },
             ),
           ),
+          // Empêche l'agrandissement de police système d'impacter l'UI
+          builder: (context, child) {
+            final mq = MediaQuery.of(context);
+            return MediaQuery(
+              data: mq.copyWith(
+                textScaler: TextScaler.linear(
+                  mq.textScaler.scale(1.0).clamp(0.8, 1.0),
+                ),
+              ),
+              child: child!,
+            );
+          },
           // home: const TableauDeBord(),
           // home: const ConnexionPage(),
           home: const SplashScreen(),

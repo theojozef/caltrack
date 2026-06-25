@@ -499,10 +499,16 @@ class _ListeAlimentsPageState extends State<ListeAlimentsPage> {
   void _modifierAlimentEnAttente(int index) async {
     final item = _alimentsEnAttente[index];
     final aliment = item['aliment'] as Aliment;
+    final quantiteActuelle = item['quantite'] as double;
+    final portionActuelle = item['portionChoisie'] as Portion;
 
     final Map<String, dynamic>? result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => QuantiteAliment(aliment: aliment)),
+      MaterialPageRoute(builder: (context) => QuantiteAliment(
+        aliment: aliment,
+        quantiteInitiale: quantiteActuelle,
+        portionInitiale: portionActuelle,
+      )),
     );
 
     if (result == null || !mounted) return;
@@ -643,6 +649,7 @@ static const double heightsearch = 35;
                           child: Text(
                             aliment.nom,
                             overflow: TextOverflow.ellipsis,
+                            maxLines: 2,
                             style: const TextStyle(
                               fontSize: 16,
                               color: Colors.white,
@@ -652,7 +659,7 @@ static const double heightsearch = 35;
                         ),
                         if (aliment.isCiqual) ...[
                           const SizedBox(width: 5),
-                          const Icon(Icons.verified, size: 14, color: Color(0xFF4DB6AC)),
+                          const Icon(Icons.verified, size: 18, color: Color(0xFF4DB6AC)),
                         ],
                       ],
                     ),
@@ -683,7 +690,9 @@ static const double heightsearch = 35;
               color: const Color(0xFF4A4A4A),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               onSelected: (value) {
-                if (value == double.infinity && hasPortion) {
+                if (value.isNaN) {
+                  _ajouterAliment(context, aliment);
+                } else if (value == double.infinity && hasPortion) {
                   _ajouterAuBuffer(aliment, 1.0, portion!);
                 } else {
                   _ajouterAuBuffer(aliment, value, Portion(nom: 'g', poids: value));
@@ -707,6 +716,11 @@ static const double heightsearch = 35;
                       value: g.toDouble(),
                       child: Text('$g g', style: const TextStyle(color: Colors.white)),
                     )),
+                const PopupMenuDivider(),
+                const PopupMenuItem<double>(
+                  value: double.nan,
+                  child: Icon(Icons.edit, color: Colors.white, size: 18),
+                ),
               ],
               child: Container(
                 margin: const EdgeInsets.only(left: 8, right: 4),
@@ -867,12 +881,14 @@ static const double heightsearch = 35;
                                 ],
                               ),
                             ),
-                            // Quantité — menu déroulant : portion par défaut (si dispo) + presets grammes
+                            // Quantité — menu déroulant : portion par défaut (si dispo) + presets grammes + crayon
                             PopupMenuButton<double>(
                               color: const Color(0xFF4A4A4A),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               onSelected: (value) {
-                                if (value == double.infinity && aliment.portions.isNotEmpty) {
+                                if (value.isNaN) {
+                                  _modifierAlimentEnAttente(index);
+                                } else if (value == double.infinity && aliment.portions.isNotEmpty) {
                                   _changerQuantiteEnAttente(index, 1.0, aliment.portions.first);
                                 } else {
                                   _changerQuantiteEnAttente(index, value, Portion(nom: 'g', poids: value));
@@ -898,6 +914,11 @@ static const double heightsearch = 35;
                                       value: g.toDouble(),
                                       child: Text('$g g', style: const TextStyle(color: Colors.white)),
                                     )),
+                                const PopupMenuDivider(),
+                                PopupMenuItem<double>(
+                                  value: double.nan,
+                                  child: const Icon(Icons.edit, color: Colors.white, size: 18),
+                                ),
                               ],
                               child: Container(
                                 margin: const EdgeInsets.only(left: 8, right: 4),
@@ -1026,6 +1047,17 @@ static const double heightsearch = 35;
                                 color: Colors.white),
                             prefixIcon: const Icon(Icons.search,
                                 color: Color(0x33D9D9D9)),
+                            suffixIcon: _recherche.isNotEmpty
+                                ? GestureDetector(
+                                    onTap: () {
+                                      _searchController.clear();
+                                      _filtrer('');
+                                      _searchFocusNode.requestFocus();
+                                    },
+                                    child: const Icon(Icons.close,
+                                        color: Color(0x88FFFFFF), size: 18),
+                                  )
+                                : null,
                             border: OutlineInputBorder(
                               borderRadius:
                                   BorderRadius.circular(heightsearch),
@@ -1084,7 +1116,13 @@ static const double heightsearch = 35;
                 ),
 
               // ── Contenu défilant : buffer + récents ou résultats de recherche ──
-              Expanded(child: _buildListContent()),
+              // Le Listener unfocus le champ de recherche dès qu'on touche la liste
+              Expanded(
+                child: Listener(
+                  onPointerDown: (_) => _searchFocusNode.unfocus(),
+                  child: _buildListContent(),
+                ),
+              ),
             ],
           ),
         ),

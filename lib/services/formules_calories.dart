@@ -154,14 +154,9 @@ class CalculateurNutrition {
     lipidesMax = lipidesMin + margeMin.toInt();
   }
 
-  if (glucidesMin < 0) {
-    glucidesMin = 0;
-  }
-
-  if (glucidesMin > glucidesMax - margeMin) {
-    glucidesMin = (glucidesMax - margeMin).toInt();
-  }
-
+  // glucidesMax doit être corrigé EN PREMIER : si glucidesMax est encore
+  // négatif quand on calcule glucidesMin = glucidesMax - margeMin, le résultat
+  // serait négatif même après avoir clamped glucidesMin à 0.
   if (glucidesMax < margeMin) {
     glucidesMax = margeMin.toInt();
   }
@@ -170,14 +165,29 @@ class CalculateurNutrition {
     glucidesMax = 1000;
   }
 
+  if (glucidesMin < 0) {
+    glucidesMin = 0;
+  }
+
+  if (glucidesMin > glucidesMax - margeMin) {
+    glucidesMin = (glucidesMax - margeMin).toInt();
+  }
+
+  // Garde finale : glucidesMin ne peut jamais être négatif
+  if (glucidesMin < 0) {
+    glucidesMin = 0;
+  }
+
+  // Fibres calculées avant l'ajustement de caloriesMin : l'ajustement peut
+  // pousser caloriesMin au-dessus de caloriesMax (calories réelles consommées),
+  // ce qui inverserait min/max des fibres.
+  int fibresMin = (caloriesMin * 12.5 / 1000).round();
+  int fibresMax = (caloriesMax * 15 / 1000).round();
+  if (fibresMin > fibresMax) fibresMin = fibresMax;
+
   if (caloriesMin < (4*protMin + 9*lipidesMin)) {
     caloriesMin = (4*protMin + 9*lipidesMin);
   }
-  // ---------------------------
-
-  int fibresMin = (caloriesMin * 12.5 / 1000).round();
-  int fibresMax = (caloriesMax * 15 / 1000).round();
-
   // ---------------------------
 
   return {

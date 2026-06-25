@@ -119,6 +119,31 @@ class _StatsPageState extends State<StatsPage> with SingleTickerProviderStateMix
     return _StatsMacros(cal, prot, lip, gluc, fib);
   }
 
+  bool _tabHasDonnees(int index) {
+    switch (index) {
+      case 0: return (_statJour?.calories ?? 0) > 0;
+      case 1: return (_statSemaine?.calories ?? 0) > 0;
+      case 2: return (_statMois?.calories ?? 0) > 0;
+      default: return true;
+    }
+  }
+
+  Widget _buildTabWidget(String label, int index) {
+    if (_isLoading || _tabHasDonnees(index)) {
+      return Tab(text: label);
+    }
+    return Tab(
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Color(0x3DFFFFFF),
+          fontWeight: FontWeight.w600,
+          fontSize: 14,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -156,10 +181,15 @@ class _StatsPageState extends State<StatsPage> with SingleTickerProviderStateMix
               unselectedLabelColor: Colors.white38,
               labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
               overlayColor: WidgetStateProperty.all(const Color(0xFF357E50).withValues(alpha: 0.15)),
-              tabs: const [
-                Tab(text: 'Aujourd\'hui'),
-                Tab(text: 'Semaine'),
-                Tab(text: 'Mois'),
+              onTap: (index) {
+                if (!_isLoading && !_tabHasDonnees(index)) {
+                  _tabController.animateTo(_tabController.previousIndex);
+                }
+              },
+              tabs: [
+                _buildTabWidget('Aujourd\'hui', 0),
+                _buildTabWidget('Semaine', 1),
+                _buildTabWidget('Mois', 2),
               ],
             ),
 
@@ -200,9 +230,34 @@ class _StatsPageState extends State<StatsPage> with SingleTickerProviderStateMix
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       children: [
-        Text(
-          sousTitre,
-          style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.5),
+        Row(
+          children: [
+            Text(
+              sousTitre,
+              style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.5),
+            ),
+            const SizedBox(width: 6),
+            GestureDetector(
+              onTap: () => showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  backgroundColor: const Color(0xFF4A4A4A),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  content: const Text(
+                    'Les bornes min/max affichées ici sont calculées en fonction des calories réellement consommées sur la période, et non de tes objectifs définis dans le journal.',
+                    style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('OK', style: TextStyle(color: Color(0xFF357E50))),
+                    ),
+                  ],
+                ),
+              ),
+              child: const Icon(Icons.info_outline, size: 16, color: Colors.white38),
+            ),
+          ],
         ),
         const SizedBox(height: 20),
 
@@ -262,10 +317,14 @@ class _StatsPageState extends State<StatsPage> with SingleTickerProviderStateMix
         const SizedBox(height: 24),
 
         // Barres macros avec bornes basées sur la moyenne calorique
+        // Si aucune donnée (calories = 0), on replie sur les objectifs du profil (getMacros)
         if (_userData != null) ...[
           LayoutBuilder(builder: (context, constraints) {
+            final calc = CalculateurNutrition(_userData!);
             final cal = stats.calories.round();
-            final bornes = CalculateurNutrition(_userData!).getMacrosNewCalories(cal, cal);
+            final bornes = cal > 0
+                ? calc.getMacrosNewCalories(cal, cal)
+                : calc.getMacros();
             return Column(
               children: [
                 GroupeBarre(
@@ -300,25 +359,21 @@ class _StatsPageState extends State<StatsPage> with SingleTickerProviderStateMix
                   compteurFontWeight: FontWeight.bold,
                   borneFontSize: 14,
                 ),
+                const SizedBox(height: 24),
+                GroupeBarre(
+                  titre: 'Fibres',
+                  valeurMin: bornes['fibres_min']!.toDouble(),
+                  valeurMax: bornes['fibres_max']!.toDouble(),
+                  compteurCalories: stats.fibres,
+                  barWidth: constraints.maxWidth,
+                  compteurFontSize: 16,
+                  compteurFontWeight: FontWeight.bold,
+                  borneFontSize: 14,
+                ),
               ],
             );
           }),
-          const SizedBox(height: 24),
         ],
-
-        // Fibres
-        LayoutBuilder(
-          builder: (context, constraints) => GroupeBarre(
-            titre: 'Fibres',
-            valeurMin: stats.calories * 0.0125,
-            valeurMax: stats.calories * 0.015,
-            compteurCalories: stats.fibres,
-            barWidth: constraints.maxWidth,
-            compteurFontSize: 16,
-            compteurFontWeight: FontWeight.bold,
-            borneFontSize: 14,
-          ),
-        ),
       ],
     );
   }
