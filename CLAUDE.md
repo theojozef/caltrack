@@ -1,5 +1,11 @@
 # CLAUDE.md — forkshot
 
+## 0. Règles de build
+
+**À chaque demande de génération d'une nouvelle version de l'application**, incrémenter le `versionCode` dans [pubspec.yaml](pubspec.yaml) avant de builder (ex: `1.0.0+3` → `1.0.0+4`). Le Play Store rejette tout build avec un code déjà utilisé.
+
+---
+
 ## 1. Objectif de l'application
 
 **forkshot** est une application mobile de suivi nutritionnel (calories + macronutriments) orientée performance et simplicité. Elle s'adresse à des personnes actives qui veulent suivre leurs apports sans peser chaque gramme au gramme près.

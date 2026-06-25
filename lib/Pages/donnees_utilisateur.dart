@@ -28,6 +28,7 @@ class _DonneesUtilisateurPageState extends State<DonneesUtilisateurPage> {
   String? _niveauActivite; // = 'actif'; // état local
   String? _sport; // = 'force';
   String? _objectif;
+  String _prenom = '';
 
   bool _isLoading = true;
 
@@ -57,6 +58,16 @@ void initState() {
 Future<void> _loadUserData() async {
   final uid = FirebaseAuth.instance.currentUser?.uid;
   if (uid == null) return;
+
+  // Prénom : Auth en priorité (rapide), Firestore en fallback
+  final displayName = FirebaseAuth.instance.currentUser?.displayName ?? '';
+  if (displayName.isNotEmpty) {
+    setState(() => _prenom = displayName);
+  } else {
+    final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final prenom = doc.data()?['prenom'] as String? ?? '';
+    if (prenom.isNotEmpty && mounted) setState(() => _prenom = prenom);
+  }
 
   // 1. LocalStorageService (même source que tableaudebord)
   final localUser = await LocalStorageService.loadUserData(uid);
@@ -361,7 +372,7 @@ child: PopScope(
                   const Icon(Icons.account_circle, color: Colors.white70, size: 32),
                   const SizedBox(width: 10),
                   Text(
-                    FirebaseAuth.instance.currentUser?.displayName ?? '',
+                    _prenom,
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w600,

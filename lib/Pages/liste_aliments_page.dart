@@ -953,7 +953,10 @@ static const double heightsearch = 35;
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _handleBack();
       },
-      child: Scaffold(
+      child: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.translucent,
+        child: Scaffold(
         backgroundColor: const Color(0xFF393939),
 
         // Bouton "Enregistrer" visible uniquement quand le buffer est non-vide
@@ -1085,6 +1088,7 @@ static const double heightsearch = 35;
             ],
           ),
         ),
+      ),
       ),
     );
   }

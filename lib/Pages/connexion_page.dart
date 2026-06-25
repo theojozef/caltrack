@@ -102,9 +102,17 @@ Future<UserModel?> fetchUserData() async {
         builder: (_) => AlertDialog(
           backgroundColor: const Color(0xFF393939),
           title: const Text("Email envoyé", style: TextStyle(color: Colors.white)),
-          content: const Text(
-            "Si un compte est associé à cette adresse, un email de réinitialisation vient d'être envoyé. Pensez à vérifier vos spam.",
-            style: TextStyle(color: Colors.white70),
+          content: const Text.rich(
+            TextSpan(
+              style: TextStyle(color: Colors.white70),
+              children: [
+                TextSpan(text: "Si un compte est associé à cette adresse, un email de réinitialisation vient d'être envoyé. "),
+                TextSpan(
+                  text: "Pensez à vérifier vos spam.",
+                  style: TextStyle(color: Color(0xFF357E50), fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(

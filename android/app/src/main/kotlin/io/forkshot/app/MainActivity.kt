@@ -1,4 +1,4 @@
-package com.example.cal_track_v1
+package io.forkshot.app
 
 import io.flutter.embedding.android.FlutterActivity
 

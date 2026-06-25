@@ -58,6 +58,8 @@ prenomController.dispose();
         password: passwordController.text.trim(),
       );
 
+      await userCredential.user!.updateDisplayName(prenomController.text.trim());
+
       await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
         'email': emailController.text.trim(),
         'prenom': prenomController.text.trim(),
