@@ -1,11 +1,11 @@
 {
-    "name": "Cal' Track",
-    "short_name": "CalTrack",
+    "name": "forkshot",
+    "short_name": "forkshot",
     "start_url": "/caltrack/",
     "display": "standalone",
     "background_color": "#393939",
     "theme_color": "#357E50",
-    "description": "A new Flutter project.",
+    "description": "Suivi nutritionnel orienté performance.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
