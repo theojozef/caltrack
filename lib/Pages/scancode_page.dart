@@ -20,6 +20,10 @@ class _ScanPageState extends State<ScanPage> {
   bool _torchEnabled = false;
   final MobileScannerController _controller = MobileScannerController();
 
+  String? _dernierCode;
+  int _confirmations = 0;
+  static const int _confirmationsRequises = 2;
+
   @override
   void dispose() {
     _controller.dispose();
@@ -118,6 +122,17 @@ class _ScanPageState extends State<ScanPage> {
     if (_isProcessing) return;
     final code = capture.barcodes.firstOrNull?.rawValue;
     if (code == null) return;
+
+    // Confirmer le même code N fois consécutives avant de traiter (évite les lectures instables)
+    if (code == _dernierCode) {
+      _confirmations++;
+    } else {
+      _dernierCode = code;
+      _confirmations = 1;
+    }
+    if (_confirmations < _confirmationsRequises) return;
+    _dernierCode = null;
+    _confirmations = 0;
 
     HapticFeedback.mediumImpact();
     setState(() => _isProcessing = true);

@@ -155,6 +155,19 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
     final bool barreVisible = keyboardHeight > 0;
     const double barreHauteur = 48;
 
+    // Quand le clavier s'ouvre, scrolle pour garder le container PORTION visible
+    if (barreVisible) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
+
     return Scaffold(
 
       resizeToAvoidBottomInset: true,
@@ -390,18 +403,7 @@ class _QuantiteAlimentState extends State<QuantiteAliment> {
       textAlignVertical: TextAlignVertical.center,
 
       // ✅ Quand l’utilisateur clique dans le champ, on efface la valeur
-      onTap: () {
-        controller.clear();
-        Future.delayed(const Duration(milliseconds: 350), () {
-          if (_scrollController.hasClients) {
-            _scrollController.animateTo(
-              _scrollController.position.maxScrollExtent,
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOut,
-            );
-          }
-        });
-      },      
+      onTap: () => controller.clear(),      
       
       onChanged: (value) {
         if (value.trim().isEmpty) return;

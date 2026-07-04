@@ -4,7 +4,7 @@ import 'package:cal_track_v1/models/user_data.dart';
 import 'package:cal_track_v1/services/formules_calories.dart';
 import 'package:cal_track_v1/services/local_storage_service.dart';
 import 'package:cal_track_v1/widgets/groupe_barre.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+// import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 // Palette camaïeu macros — modifier ces constantes puis faire 'r' pour voir le changement
@@ -43,8 +43,7 @@ class _StatsPageState extends State<StatsPage> with SingleTickerProviderStateMix
   }
 
   Future<void> _chargerStats() async {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) return;
+    final userId = await LocalStorageService.getCurrentUserId();
 
     final userData = await LocalStorageService.loadUserData(userId);
     final allDates = await LocalStorageService.getJoursAvecDonnees(userId);
@@ -90,7 +89,7 @@ class _StatsPageState extends State<StatsPage> with SingleTickerProviderStateMix
     final listes = <List<AlimentConsomme>>[];
     for (final d in dates) {
       final aliments = await LocalStorageService.loadAlimentsDuJour(userId, d);
-      if (aliments.isNotEmpty) listes.add(aliments);
+      if (aliments.any((a) => !a.estEpingle)) listes.add(aliments);
     }
     if (listes.isEmpty) return _StatsMacros.zero();
     final total = _somme(listes);
@@ -227,44 +226,21 @@ class _StatsPageState extends State<StatsPage> with SingleTickerProviderStateMix
     final pctLip  = totalKcal > 0 ? (kcalLip  / totalKcal * 100) : 0.0;
     final pctGluc = totalKcal > 0 ? (kcalGluc / totalKcal * 100) : 0.0;
 
+    final double hPad = MediaQuery.of(context).size.width * 0.05;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      padding: EdgeInsets.fromLTRB(hPad, 16, hPad, 32),
       children: [
-        Row(
-          children: [
-            Text(
-              sousTitre,
-              style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.5),
-            ),
-            const SizedBox(width: 6),
-            GestureDetector(
-              onTap: () => showDialog(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  backgroundColor: const Color(0xFF4A4A4A),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  content: const Text(
-                    'Les bornes min/max affichées ici sont calculées en fonction des calories réellement consommées sur la période, et non de tes objectifs définis dans le journal.',
-                    style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('OK', style: TextStyle(color: Color(0xFF357E50))),
-                    ),
-                  ],
-                ),
-              ),
-              child: const Icon(Icons.info_outline, size: 16, color: Colors.white38),
-            ),
-          ],
+        Text(
+          sousTitre,
+          style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.5),
         ),
-        const SizedBox(height: 20),
+        
+        const SizedBox(height: 10),
 
         // Calories + Donut + Macros
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 20),
           decoration: BoxDecoration(
             color: const Color(0xFF393939), // même couleur que le fond de page
             // color: Colors.white.withValues(alpha: 0.06),
@@ -273,20 +249,37 @@ class _StatsPageState extends State<StatsPage> with SingleTickerProviderStateMix
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Text(
+              /*const Text(
                 'Calories',
                 style: TextStyle(color: Colors.white54, fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 1),
               ),
               const SizedBox(height: 2),
               Text(
                 '${stats.calories.toStringAsFixed(0)} kcal',
-                style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.bold),
+                style: const TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 30),*/
               Row(
-                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          stats.calories.toStringAsFixed(0),
+                          style: const TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.bold),
+                        ),
+                        const Text(
+                          'Kcalories',
+                          style: TextStyle(color: Colors.white54, fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 1),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(width: 35),
                   SizedBox(
                     width: 120,
                     height: 120,
@@ -297,16 +290,20 @@ class _StatsPageState extends State<StatsPage> with SingleTickerProviderStateMix
                       ),
                     ),
                   ),
-                  const SizedBox(width: 25),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildMacroInfo('Protéines', pctProt, stats.proteines, couleurProt),
-                      const SizedBox(height: 10),
-                      _buildMacroInfo('Lipides',   pctLip,  stats.lipides,   couleurLip),
-                      const SizedBox(height: 10),
-                      _buildMacroInfo('Glucides',  pctGluc, stats.glucides,  couleurGluc),
-                    ],
+                  
+                  const SizedBox(width: 35),
+
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildMacroInfo('Protéines', pctProt, stats.proteines, couleurProt),
+                        const SizedBox(height: 10),
+                        _buildMacroInfo('Lipides',   pctLip,  stats.lipides,   couleurLip),
+                        const SizedBox(height: 10),
+                        _buildMacroInfo('Glucides',  pctGluc, stats.glucides,  couleurGluc),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -316,15 +313,10 @@ class _StatsPageState extends State<StatsPage> with SingleTickerProviderStateMix
 
         const SizedBox(height: 24),
 
-        // Barres macros avec bornes basées sur la moyenne calorique
-        // Si aucune donnée (calories = 0), on replie sur les objectifs du profil (getMacros)
+        // Barres macros : bornes fixes du profil (identiques au journal)
         if (_userData != null) ...[
           LayoutBuilder(builder: (context, constraints) {
-            final calc = CalculateurNutrition(_userData!);
-            final cal = stats.calories.round();
-            final bornes = cal > 0
-                ? calc.getMacrosNewCalories(cal, cal)
-                : calc.getMacros();
+            final bornes = CalculateurNutrition(_userData!).getMacros();
             return Column(
               children: [
                 GroupeBarre(
@@ -396,8 +388,8 @@ class _StatsPageState extends State<StatsPage> with SingleTickerProviderStateMix
           ],
         ),
         Text(
-          '${grammes.toStringAsFixed(0)}g / ${pct.toStringAsFixed(0)}%',
-          style: const TextStyle(color: Colors.white54, fontSize: 12),
+          '${grammes.toStringAsFixed(0)}g | ${pct.toStringAsFixed(0)}%',
+          style: const TextStyle(color: Colors.white54, fontSize: 14),
         ),
       ],
     );

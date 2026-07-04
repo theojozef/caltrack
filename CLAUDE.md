@@ -12,7 +12,7 @@
 
 Philosophie centrale : afficher une **plage cible** (min–max) plutôt qu'un objectif ponctuel. L'utilisateur est dans la zone verte s'il se trouve entre le min et le max — pas besoin d'atteindre un chiffre exact.
 
-Déployée en PWA sur GitHub Pages : repo `theojozef/caltrack`, base-href `/caltrack/`.
+Distribuée sur **App Store** (iOS) et **Google Play Store** (Android).
 
 ---
 
@@ -69,7 +69,9 @@ assets/
 ```
 
 **Flux de navigation :**
-`SplashScreen` → (auth ok) → `TableauDeBord` ← → `ListeAlimentsPage` / `StatsPage` / `GuidePage` / `DonneesUtilisateur`
+`SplashScreen` → (profil existant OU nouveau) → `DonneesUtilisateur` → `TableauDeBord` ← → `ListeAlimentsPage` / `StatsPage` / `GuidePage` / `DonneesUtilisateur`
+
+L'inscription Firebase est **optionnelle** (mode invité par défaut). Le `SplashScreen` redirige vers `TableauDeBord` si un profil local existe, vers `DonneesUtilisateur` sinon — sans vérifier l'état Firebase Auth.
 
 ---
 
@@ -159,6 +161,7 @@ assets/
 
 ## 5. Fonctionnalités en cours / manquantes
 
+- **Mode invité (guest-first)** : à implémenter — l'app doit fonctionner sans compte Firebase ; un UUID local (`guest_id` dans SharedPreferences) remplace le `uid` Firebase pour les clés de données ; l'inscription reste proposée comme option de sauvegarde cloud dans les paramètres du profil
 - **Journal (HistoriquePage)** : codé mais non branché dans la nav bar (bouton "Journal" inactif)
 - **Suivi du poids** : aucune fonctionnalité de saisie ou courbe de poids dans le temps
 - **Notifications** : aucun rappel ou notification push
@@ -187,8 +190,11 @@ assets/
 
 ## 7. Décisions techniques importantes
 
+### Guest-first : pas de compte requis
+L'app fonctionne intégralement sans compte Firebase. À la première ouverture, un UUID est généré et stocké dans SharedPreferences sous la clé `guest_id` — il sert de `userId` pour toutes les clés de données locales. Si l'utilisateur crée ensuite un compte Firebase, son `uid` remplace le `guest_id` et les données locales migrent sous la nouvelle clé. L'inscription est proposée dans les paramètres comme "Sauvegarder mes données sur le cloud".
+
 ### Local-first, cloud en backup
-Les aliments du jour et le profil sont sauvegardés en local (SharedPreferences) avant tout. Firestore est utilisé uniquement pour le profil utilisateur, pas pour les journaux alimentaires. Cela assure un fonctionnement offline sans accroc.
+Les aliments du jour et le profil sont sauvegardés en local (SharedPreferences) avant tout. Firestore est utilisé uniquement pour le profil utilisateur connecté, pas pour les journaux alimentaires. Cela assure un fonctionnement offline complet y compris en mode invité.
 
 ### Plage cible plutôt qu'objectif fixe
 Toutes les macros s'affichent en min/max, jamais en valeur unique. Le calcul utilise Mifflin-St Jeor avec poids de calcul corrigé (PDC) : si l'IMC est hors norme, on calcule les protéines sur le poids idéal plutôt que le poids réel.

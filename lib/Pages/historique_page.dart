@@ -1,6 +1,6 @@
 import 'package:cal_track_v1/models/aliment.dart';
 import 'package:cal_track_v1/services/local_storage_service.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+// import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 class HistoriquePage extends StatefulWidget {
@@ -21,8 +21,7 @@ class _HistoriquePageState extends State<HistoriquePage> {
   }
 
   Future<void> _chargerHistorique() async {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) return;
+    final userId = await LocalStorageService.getCurrentUserId();
 
     final dates = await LocalStorageService.getJoursAvecDonnees(userId);
 

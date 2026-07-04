@@ -62,6 +62,17 @@ class GuidePage extends StatelessWidget {
                       MaterialPageRoute(builder: (_) => const CodesCouleursPage()),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  _NavButton(
+                    icon: Icons.restaurant_rounded,
+                    iconColor: const Color(0xFFCA7C35),
+                    title: "Qu'est-ce qu'un repas équilibré ?",
+                    subtitle: "Comprendre les indicateurs par repas",
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const RepasEquilibrePage()),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1548,6 +1559,335 @@ class _ContactItem extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+// ── Page 5 : Qu'est-ce qu'un repas équilibré ? ───────────────────────────────
+
+class RepasEquilibrePage extends StatelessWidget {
+  const RepasEquilibrePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF393939),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildHeader(context),
+            Expanded(
+              child: ListView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+                children: const [
+                  _SectionCard(
+                    icon: Icons.info_outline_rounded,
+                    iconColor: Color(0xFF5B9BD5),
+                    title: "Ces indicateurs, c'est quoi ?",
+                    content: _RepasEquilibreIntroContent(),
+                  ),
+                  SizedBox(height: 14),
+                  _SectionCard(
+                    icon: Icons.balance_rounded,
+                    iconColor: Color(0xFFCA7C35),
+                    title: "Les 3 règles d'équilibre",
+                    content: _RepasEquilibreReglesContent(),
+                  ),
+                  SizedBox(height: 14),
+                  _SectionCard(
+                    icon: Icons.lightbulb_outline_rounded,
+                    iconColor: Color(0xFF357E50),
+                    title: "Ce que ça ne remplace pas",
+                    content: _RepasEquilibreNuanceContent(),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 16, 16, 14),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+          const SizedBox(width: 4),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Repas équilibré",
+                  style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700),
+                ),
+                Text(
+                  "Comprendre les indicateurs par repas",
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RepasEquilibreIntroContent extends StatelessWidget {
+  const _RepasEquilibreIntroContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _BodyText(
+          "Appuyez sur le bouton ℹ à droite d'un repas pour faire apparaître trois étiquettes : P, L et G.",
+        ),
+        SizedBox(height: 10),
+        _BodyText(
+          "Chaque étiquette affiche un pourcentage — la part de cette macro dans les calories totales du repas.",
+        ),
+        SizedBox(height: 12),
+        _FormulaBox(
+          "Exemple : repas à 400 kcal\n"
+          "  → 30 g de protéines = 120 kcal  →  P affiche 30 %\n"
+          "  → 15 g de lipides   = 135 kcal  →  L affiche 34 %\n"
+          "  → 35 g de glucides  = 140 kcal  →  G affiche 35 %",
+        ),
+        SizedBox(height: 12),
+        _BodyText(
+          "Ces proportions permettent de voir d'un coup d'œil si un repas est dominé par un seul type de nutriment, ou si les apports sont répartis.",
+        ),
+      ],
+    );
+  }
+}
+
+class _RepasEquilibreReglesContent extends StatelessWidget {
+  const _RepasEquilibreReglesContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _BodyText(
+          "Ces indicateurs montrent la part de chaque macro dans les calories totales du repas. Chaque couleur reflète si cette part est dans une fourchette raisonnable.",
+        ),
+        SizedBox(height: 14),
+        SizedBox(height: 16),
+        _MacroRegleWidget(
+          letter: 'P',
+          label: 'Protéines',
+          conditionOk: '≥ 15 % des calories du repas',
+          descOk: 'Le repas est bien protéiné — rassasiant et préserve la masse musculaire.',
+          colorOk: Color(0xFF0BE754),
+          symbolOk: '✓',
+          conditionNotOk: '< 15 % des calories du repas',
+          descNotOk: 'La part de protéines est faible dans ce repas.',
+          colorNotOk: Colors.white,
+          symbolNotOk: '~',
+        ),
+        SizedBox(height: 16),
+        Divider(color: Color(0x22FFFFFF), height: 1),
+        SizedBox(height: 16),
+        _MacroRegleWidget(
+          letter: 'L',
+          label: 'Lipides',
+          conditionOk: '≤ 40 % des calories du repas',
+          descOk: 'Proportion de graisses raisonnable — les lipides sont essentiels, pas en excès.',
+          colorOk: Color(0xFF0BE754),
+          symbolOk: '✓',
+          conditionNotOk: '> 40 % des calories du repas',
+          descNotOk: 'Repas très gras — normal pour un repas fromage/noix, à équilibrer sur la journée.',
+          colorNotOk: Color(0xFFBC5A56),
+          symbolNotOk: '!',
+        ),
+        SizedBox(height: 16),
+        Divider(color: Color(0x22FFFFFF), height: 1),
+        SizedBox(height: 16),
+        _MacroRegleWidget(
+          letter: 'G',
+          label: 'Glucides',
+          conditionOk: '≤ 60 % des calories du repas',
+          descOk: 'Glucides modérés — le repas n\'est pas dominé par les sucres et les féculents.',
+          colorOk: Color(0xFF0BE754),
+          symbolOk: '✓',
+          conditionNotOk: '> 60 % des calories du repas',
+          descNotOk: 'Repas très glucidique — courant pour des pâtes ou du riz seuls, à compléter.',
+          colorNotOk: Color(0xFFBC5A56),
+          symbolNotOk: '!',
+        ),
+      ],
+    );
+  }
+}
+
+class _RepasEquilibreNuanceContent extends StatelessWidget {
+  const _RepasEquilibreNuanceContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _BodyText(
+          "Ces indicateurs donnent une photographie instantanée d'un repas — pas un verdict sur sa qualité.",
+        ),
+        SizedBox(height: 10),
+        _BulletPoint(
+          label: "Le repas n'est pas l'unité de mesure",
+          text: "c'est la journée entière qui compte. Un repas de fromage et noix sera légitimement très gras (L rouge), mais parfaitement cohérent si les autres repas équilibrent.",
+        ),
+        SizedBox(height: 8),
+        _BulletPoint(
+          label: "Pas d'aliment interdit",
+          text: "les seuils détectent des déséquilibres structurels, pas des erreurs alimentaires. Un repas très glucidique avant un effort physique peut être tout à fait adapté.",
+        ),
+        SizedBox(height: 8),
+        _BulletPoint(
+          label: "Protéines : la règle la plus utile",
+          text: "le seuil des 15 % est particulièrement pertinent — c'est souvent la macro la plus négligée dans un repas rapide ou un encas sucré.",
+        ),
+        SizedBox(height: 12),
+        _InfoBox(
+          "Utilisez ces indicateurs pour repérer des tendances, pas pour juger chaque repas. Si P est souvent en orange sur plusieurs jours, c'est un signal. Un seul repas déséquilibré, c'est normal.",
+        ),
+      ],
+    );
+  }
+}
+
+class _MacroRegleWidget extends StatelessWidget {
+  final String letter;
+  final String label;
+  final String conditionOk;
+  final String descOk;
+  final Color colorOk;
+  final String symbolOk;
+  final String conditionNotOk;
+  final String descNotOk;
+  final Color colorNotOk;
+  final String symbolNotOk;
+
+  const _MacroRegleWidget({
+    required this.letter,
+    required this.label,
+    required this.conditionOk,
+    required this.descOk,
+    required this.colorOk,
+    required this.symbolOk,
+    required this.conditionNotOk,
+    required this.descNotOk,
+    required this.colorNotOk,
+    required this.symbolNotOk,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 10),
+        _RegleStateRow(
+          letter: letter,
+          color: colorOk,
+          condition: conditionOk,
+          desc: descOk,
+          symbol: symbolOk,
+        ),
+        const SizedBox(height: 8),
+        _RegleStateRow(
+          letter: letter,
+          color: colorNotOk,
+          condition: conditionNotOk,
+          desc: descNotOk,
+          symbol: symbolNotOk,
+        ),
+      ],
+    );
+  }
+}
+
+class _RegleStateRow extends StatelessWidget {
+  final String letter;
+  final Color color;
+  final String condition;
+  final String desc;
+  final String symbol;
+
+  const _RegleStateRow({
+    required this.letter,
+    required this.color,
+    required this.condition,
+    required this.desc,
+    required this.symbol,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 30,
+          height: 24,
+          decoration: BoxDecoration(
+            color: color.withAlpha(28),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: color.withAlpha(100), width: 1),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            letter,
+            style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w800),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                condition,
+                style: TextStyle(color: color, fontSize: 12.5, fontWeight: FontWeight.w600, height: 1.3),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                desc,
+                style: const TextStyle(color: Colors.white54, fontSize: 12, height: 1.4),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
+            color: color.withAlpha(25),
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            symbol,
+            style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+        ),
+      ],
     );
   }
 }

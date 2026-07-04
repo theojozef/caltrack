@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:csv/csv.dart';
 import 'package:cal_track_v1/models/aliment.dart';
+import 'package:cal_track_v1/services/portions_standards.dart';
 
 Future<List<Aliment>> chargerAlimentsDepuisCSV() async {
   // rootBundle doit rester sur l'isolate principal
@@ -26,14 +27,16 @@ List<Aliment> _parseCSV(String data) {
 
   return csvTable.skip(1).map((row) {
     try {
+      final nom = row[nomIndex].toString();
       return Aliment(
-        nom: row[nomIndex].toString(),
+        nom: nom,
         calories: parseVal(row[kcalIndex]),
         proteines: parseVal(row[protIndex]),
         glucides: parseVal(row[glucIndex]),
         lipides: parseVal(row[lipIndex]),
         fibres: fibresIndex >= 0 && fibresIndex < row.length ? parseVal(row[fibresIndex]) : 0,
         sucresLibres: 0,
+        portions: portionsPourAliment(nom),
         isCiqual: true,
       );
     } catch (e) {

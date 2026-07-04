@@ -1,6 +1,7 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
-import 'package:cal_track_v1/Pages/connexion_page.dart';
+// import 'package:cal_track_v1/Pages/connexion_page.dart';
 import 'package:cal_track_v1/Pages/donnees_utilisateur.dart';
 import 'package:cal_track_v1/Pages/guide_page.dart';
 import 'package:cal_track_v1/Pages/stats_page.dart';
@@ -14,7 +15,10 @@ import 'package:cal_track_v1/widgets/quantite_aliment.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cal_track_v1/widgets/groupe_barre.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 // import 'connexion_page.dart';
 
@@ -22,6 +26,7 @@ import 'package:cal_track_v1/widgets/groupe_barre.dart';
 //import 'package:shared_preferences/shared_preferences.dart';
 
 const double _espacementAliments = 8;
+const double _gap = 6.0; // espacement entre cellules macro
 
 class TableauDeBord extends StatefulWidget {
   const TableauDeBord({super.key});  
@@ -53,6 +58,7 @@ class _TableauDeBordState extends State<TableauDeBord> {
   // double compteurSucresLibres = 0;
 
   UserModel? _userData;
+  String _userId = '';
 
   DateTime _dateSelectionnee = DateTime.now(); // jour affiché (today par défaut)
   Set<String> _joursAvecDonnees = {};          // dates avec au moins un aliment
@@ -66,9 +72,14 @@ class _TableauDeBordState extends State<TableauDeBord> {
     for (final r in Repas.values) r.name: true,
   };
 
+  // Chips macro visibles temporairement (5s) sur pression du bouton "i"
+  final Set<String> _macroChipsVisibles = {};
+  final Map<String, Timer> _macroChipsTimers = {};
+
   bool _isLoading = false;
   bool _ajustementDebloque = false;
   bool _macrosLocalesExistantes = false;
+  bool _modeEdition = false;
 
   // Date du jour affiché (peut être un jour passé)
   String get _dateCourante => LocalStorageService.formatDate(_dateSelectionnee);
@@ -86,7 +97,7 @@ class _TableauDeBordState extends State<TableauDeBord> {
   // Vrai si on a atteint la limite de navigation future (+7 jours)
   bool get _estALimite {
     final today = DateTime.now();
-    final dateLimite = DateTime(today.year, today.month, today.day).add(const Duration(days: 7));
+    final dateLimite = DateTime(today.year, today.month, today.day).add(const Duration(days: 30));
     final dateOnly = DateTime(_dateSelectionnee.year, _dateSelectionnee.month, _dateSelectionnee.day);
     return !dateOnly.isBefore(dateLimite);
   }
@@ -94,32 +105,35 @@ class _TableauDeBordState extends State<TableauDeBord> {
   @override
   void initState() {
     super.initState();
-
     _initializeData();
   }
 
-Future<void> _initializeData() async {
-  
-  final userId = FirebaseAuth.instance.currentUser?.uid;
-  
-  // Si pas d'utilisateur connecté, retourner à la page de connexion
-  if (userId == null) {
-    if (!mounted) return;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const ConnexionPage()),
-    );
-    return;
+  @override
+  void dispose() {
+    for (final t in _macroChipsTimers.values) {
+      t.cancel();
+    }
+    super.dispose();
   }
+
+  void _afficherMacroChips(String key) {
+    _macroChipsTimers[key]?.cancel();
+    setState(() => _macroChipsVisibles.add(key));
+    _macroChipsTimers[key] = Timer(const Duration(seconds: 5), () {
+      if (mounted) setState(() => _macroChipsVisibles.remove(key));
+    });
+  }
+
+Future<void> _initializeData() async {
+
+  _userId = await LocalStorageService.getCurrentUserId();
 
   setState(() { _isLoading = true; });
 
-
-  // ÉRAPE 1 : Charger données locales
-  
-  final localUser = await LocalStorageService.loadUserData(userId);
-  final localMacros = await LocalStorageService.loadMacros(userId);
-  final aliments = await LocalStorageService.loadAlimentsDuJour(userId, _dateCourante);
+  // ÉTAPE 1 : Charger données locales
+  final localUser = await LocalStorageService.loadUserData(_userId);
+  final localMacros = await LocalStorageService.loadMacros(_userId);
+  final aliments = await LocalStorageService.loadAlimentsDuJour(_userId, _dateCourante);
 
   if (localUser != null) {
     _userData = localUser;
@@ -128,7 +142,6 @@ Future<void> _initializeData() async {
       _mettreAJourDonneesUtilisateur(localUser);
     }
   }
-
 
   if (localMacros != null) {
     _macrosLocalesExistantes = true;
@@ -143,27 +156,26 @@ Future<void> _initializeData() async {
     fibresMin = localMacros['fibres_min']!.toDouble();
     fibresMax = localMacros['fibres_max']!.toDouble();
   } else {
-      // 2) Si pas de macros locales, tenter de récupérer depuis Firebase
-      final fetched = await fetchUserData(); // <-- votre méthode existante
-      if (fetched != null) {
-        _userData = fetched;
-        _mettreAJourDonneesUtilisateur(fetched);
-      } else {
-        // Pas de données en base : forcer la déconnexion et retourner à la connexion
-        if (!mounted) return;
-        await FirebaseAuth.instance.signOut();
-        Navigator.pushReplacement(
-          // ignore: use_build_context_synchronously
-          context,
-          MaterialPageRoute(builder: (_) => const ConnexionPage()),
-        );
-        return;
-      }
+    // Pas de macros locales : tenter Firebase si connecté
+    final fetched = await fetchUserData();
+    if (fetched != null) {
+      _userData = fetched;
+      _mettreAJourDonneesUtilisateur(fetched);
+    } else if (localUser == null) {
+      // Aucune donnée locale ni Firebase : première utilisation → saisie du profil
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        // ignore: use_build_context_synchronously
+        context,
+        MaterialPageRoute(builder: (_) => const DonneesUtilisateurPage(fromInscription: true)),
+      );
+      return;
     }
+  }
 
-  // if (localMacros == null) {_mettreAJourDepuisFirebase(userId);}
+  // if (localMacros == null) {_mettreAJourDepuisFirebase(_userId);}
 
-  await _chargerAlimentsEtCompteurs(aliments); //!! AJOUTER FONCTION ??
+  await _chargerAlimentsEtCompteurs(aliments);
 
   // Initialiser _derniereDateMaj AVANT la vérification pour ne pas effacer
   // les aliments qu'on vient de charger (sinon la condition "null" déclencherait toujours le clear)
@@ -171,18 +183,107 @@ Future<void> _initializeData() async {
   _derniereDateMaj = DateTime(maintenant.year, maintenant.month, maintenant.day);
 
   // ÉTAPE 2 : Vérifier changement de jour
-
   await _verifierEtReinitialiserAliments();
-  
+
+  // ÉTAPE 3 : Appliquer les aliments épinglés au jour courant
+  await _appliquerPins();
+
   setState(() => _isLoading = false);
 
-  // ÉTAPE 3 : Mise à jour Firebase (asynchrone, ne bloque pas l'UI)
-  _mettreAJourDepuisFirebase(userId);
+  // ÉTAPE 3 : Mise à jour Firebase (asynchrone, ne bloque pas l'UI, ignoré si guest)
+  _mettreAJourDepuisFirebase(_userId);
 
   // Charger les jours avec données pour le calendrier
-  _chargerJoursAvecDonnees(userId);
+  _chargerJoursAvecDonnees(_userId);
+
+  // Vérification silencieuse de mise à jour
+  _verifierMiseAJour();
 }
   
+  // ── Vérification de mise à jour ────────────────────────────────────────────
+
+  Future<void> _verifierMiseAJour() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      final versionActuelle = '${packageInfo.version}+${packageInfo.buildNumber}';
+
+      final doc = await FirebaseFirestore.instance
+          .collection('config')
+          .doc('app')
+          .get();
+      if (!doc.exists) return;
+      final latestVersion = doc.data()?['latestVersion'] as String?;
+      if (latestVersion == null) return;
+      if (_estVersionSuperieure(latestVersion, versionActuelle)) {
+        if (!mounted) return;
+        _afficherDialogMiseAJour();
+      }
+    } catch (_) {
+      // Silencieux si pas de connexion ou document absent
+    }
+  }
+
+  bool _estVersionSuperieure(String distante, String locale) {
+    List<int> parseVersion(String v) {
+      final parts = v.split('+');
+      final semver = parts[0].split('.').map((p) => int.tryParse(p) ?? 0).toList();
+      final build = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+      return [...semver, build];
+    }
+    final d = parseVersion(distante);
+    final l = parseVersion(locale);
+    for (int i = 0; i < d.length; i++) {
+      final a = i < d.length ? d[i] : 0;
+      final b = i < l.length ? l[i] : 0;
+      if (a > b) return true;
+      if (a < b) return false;
+    }
+    return false;
+  }
+
+  void _afficherDialogMiseAJour() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black54,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF2A2A2A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Mise à jour disponible',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17),
+        ),
+        content: const Text(
+          'Une nouvelle version de forkshot est disponible. Mettez à jour pour profiter des dernières améliorations.',
+          style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Plus tard', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final uri = Uri.parse(
+                'https://play.google.com/store/apps/details?id=io.forkshot.app',
+              );
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF357E50),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Mettre à jour', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   // Charger données Firebase (prioritaire)
   Future<void> _mettreAJourDepuisFirebase(String userId) async {
 
@@ -296,10 +397,7 @@ Future<void> _initializeData() async {
     fibresMax = macros['fibres_max']!.toDouble();
   });
 
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-  if (userId != null) {
-    LocalStorageService.saveMacros(userId, macros);
-  }
+    LocalStorageService.saveMacros(_userId, macros);
   }
 
 // Vérifier si les aliments du jour doivent être réinitialisés (nouvelle journée)
@@ -307,8 +405,6 @@ Future<void> _initializeData() async {
   // Pas de réinitialisation si on consulte un jour passé
   if (!_estAujourdhui) return;
 
-  final userId = FirebaseAuth.instance.currentUser?.uid ?? "offline_user";
-    
   final maintenant = DateTime.now();
   final aujourdHui = DateTime(maintenant.year, maintenant.month, maintenant.day);
 
@@ -320,7 +416,7 @@ Future<void> _initializeData() async {
     // Figer les macros du jour qui se termine avant de passer au suivant
     if (_derniereDateMaj != null) {
       final hierStr = LocalStorageService.formatDate(_derniereDateMaj!);
-      await LocalStorageService.saveMacrosSnapshot(userId, hierStr, {
+      await LocalStorageService.saveMacrosSnapshot(_userId, hierStr, {
         'calories_min': caloriesMin.round(),
         'calories_max': caloriesMax.round(),
         'prot_min': protMin.round(),
@@ -347,7 +443,7 @@ Future<void> _initializeData() async {
     });
 
   // Sauvegarder liste vide uniquement après avoir confirmé nouvelle journée
-  await LocalStorageService.saveAlimentsDuJour(userId, _alimentsDuJour, _dateCourante);
+  await LocalStorageService.saveAlimentsDuJour(_userId, _alimentsDuJour, _dateCourante);
 
     }
   }
@@ -356,7 +452,7 @@ Future<void> _initializeData() async {
   void _ouvrirChoixRepas() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF2E2E2E),
+      backgroundColor: const Color(0xFF2A2A2A),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -421,6 +517,7 @@ Future<void> _initializeData() async {
         reverseTransitionDuration: const Duration(milliseconds: 300), // 280
         pageBuilder: (context, animation, secondaryAnimation) => ListeAlimentsPage(
           repasPreselectionne: repas,
+          dateCourante: _dateCourante,
           onAlimentAjoute: (Aliment aliment, double quantite, Portion portionChoisie, Repas? repasChoisi) {
 
             // Convertir la quantité en grammes
@@ -451,8 +548,6 @@ Future<void> _initializeData() async {
   }
 
   void _ajouterAliment(Aliment aliment, double quantite, Map<String, double> macros, [Repas? repas]) async {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) return;
 
     setState(() {
 
@@ -472,10 +567,74 @@ Future<void> _initializeData() async {
       
     });
 
-    await LocalStorageService.saveAlimentsDuJour(userId, _alimentsDuJour, _dateCourante);
+    await LocalStorageService.saveAlimentsDuJour(_userId, _alimentsDuJour, _dateCourante);
   }
 
-  void _supprimerAliment(AlimentConsomme alimentConsomme) async {
+  void _supprimerAliment(AlimentConsomme alimentConsomme) {
+    if (alimentConsomme.estEpingle) {
+      _afficherDialogSuppressionEpingle(alimentConsomme);
+    } else {
+      _doSupprimerAliment(alimentConsomme, retirerPin: false);
+    }
+  }
+
+  void _afficherDialogSuppressionEpingle(AlimentConsomme a) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF2A2A2A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Aliment récurrent',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        content: const Text(
+          'Cet aliment est ajouté automatiquement chaque jour.\nQue souhaitez-vous faire ?',
+          style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
+        ),
+        actionsAlignment: MainAxisAlignment.start,
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () { Navigator.pop(ctx); _doSupprimerAliment(a, retirerPin: false); },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFCA7C35),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: const Text(
+                'Supprimer uniquement aujourd\'hui',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+            ),
+          ),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () { Navigator.pop(ctx); _doSupprimerAliment(a, retirerPin: true); },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFBC5A56),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: const Text(
+                'Arrêter la répétition et supprimer',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _doSupprimerAliment(AlimentConsomme alimentConsomme, {required bool retirerPin}) async {
+    if (retirerPin) {
+      await LocalStorageService.removePin(_userId, alimentConsomme);
+      await LocalStorageService.nettoyerPinGlobal(_userId, alimentConsomme, _dateCourante);
+    }
     setState(() {
       _alimentsDuJour.remove(alimentConsomme);
 
@@ -486,22 +645,15 @@ Future<void> _initializeData() async {
       compteurGlucides -= macros['glucides'] ?? 0;
       compteurLipides -= macros['lipides'] ?? 0;
       compteurFibres -= macros['fibres'] ?? 0;
-      // compteurSucresLibres -= macros['sucres'] ?? 0;
 
-      // Empêche des valeurs négatives dues aux arrondis
       compteurkcal = compteurkcal.clamp(0, double.infinity);
       compteurProteines = compteurProteines.clamp(0, double.infinity);
       compteurGlucides = compteurGlucides.clamp(0, double.infinity);
       compteurLipides = compteurLipides.clamp(0, double.infinity);
       compteurFibres = compteurFibres.clamp(0, double.infinity);
-      // compteurSucresLibres = compteurSucresLibres.clamp(0, double.infinity);
     });
 
-    // Sauvegarde après suppression (manquait avant)
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId != null) {
-      await LocalStorageService.saveAlimentsDuJour(userId, _alimentsDuJour, _dateCourante);
-    }
+    await LocalStorageService.saveAlimentsDuJour(_userId, _alimentsDuJour, _dateCourante);
   }
   
   void _modifierAliment(AlimentConsomme alimentConsomme) async {
@@ -547,9 +699,10 @@ Future<void> _initializeData() async {
       // compteurLipides = compteurLipides - (oldMacros['sucres'] ?? 0) + (newMacros['sucres'] ?? 0);
     });
 
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId != null) {
-      await LocalStorageService.saveAlimentsDuJour(userId, _alimentsDuJour, _dateCourante);
+    await LocalStorageService.saveAlimentsDuJour(_userId, _alimentsDuJour, _dateCourante);
+
+    if (alimentConsomme.estEpingle) {
+      await LocalStorageService.updatePinQuantite(_userId, alimentConsomme);
     }
   }
 }
@@ -567,9 +720,74 @@ Future<void> _initializeData() async {
       compteurFibres    = (compteurFibres    - (oldMacros['fibres']    ?? 0) + (newMacros['fibres']    ?? 0)).clamp(0, double.infinity);
     });
 
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId != null) {
-      await LocalStorageService.saveAlimentsDuJour(userId, _alimentsDuJour, _dateCourante);
+    await LocalStorageService.saveAlimentsDuJour(_userId, _alimentsDuJour, _dateCourante);
+
+    if (alimentConsomme.estEpingle) {
+      await LocalStorageService.updatePinQuantite(_userId, alimentConsomme);
+    }
+  }
+
+  // Fusionne les aliments épinglés dans la liste du jour courant (ou futur).
+  // Sans effet sur les jours passés.
+  Future<void> _appliquerPins() async {
+    if (_estPasse) return;
+
+    final pins = await LocalStorageService.loadPinnedItems(_userId);
+    if (pins.isEmpty) return;
+
+    bool modified = false;
+    for (final pin in pins) {
+      final dejaPresent = _alimentsDuJour.any(
+        (a) => a.aliment.nom == pin.aliment.nom && a.repas == pin.repas,
+      );
+      if (!dejaPresent) {
+        final item = AlimentConsomme(
+          pin.aliment, pin.quantite,
+          repas: pin.repas, estEpingle: true,
+        );
+        final m = item.aliment.getMacrosPourQuantite(item.quantite);
+        _alimentsDuJour.add(item);
+        compteurkcal      += m['calories']  ?? 0;
+        compteurProteines += m['proteines'] ?? 0;
+        compteurLipides   += m['lipides']   ?? 0;
+        compteurGlucides  += m['glucides']  ?? 0;
+        compteurFibres    += m['fibres']    ?? 0;
+        modified = true;
+      }
+    }
+
+    if (modified) {
+      await LocalStorageService.saveAlimentsDuJour(_userId, _alimentsDuJour, _dateCourante);
+    }
+  }
+
+  Future<void> _togglePin(AlimentConsomme a) async {
+    final wasPinned = a.estEpingle;
+    setState(() => a.estEpingle = !wasPinned);
+
+    if (!wasPinned) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Cet aliment sera ajouté automatiquement chaque jour. '
+              'Glissez à droite pour arrêter la répétition.',
+              style: TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
+            ),
+            backgroundColor: const Color(0xFF2A2A2A),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            margin: const EdgeInsets.only(bottom: 72, left: 16, right: 16),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+    }
+
+    await LocalStorageService.togglePin(_userId, a);
+    await LocalStorageService.saveAlimentsDuJour(_userId, _alimentsDuJour, _dateCourante);
+    if (wasPinned) {
+      await LocalStorageService.nettoyerPinGlobal(_userId, a, _dateCourante);
     }
   }
 
@@ -607,24 +825,20 @@ Future<void> _initializeData() async {
 
   });
 
-  // Sauvegarde en local
-  final userId = FirebaseAuth.instance.currentUser?.uid;
-  if (userId != null) {
-    await LocalStorageService.saveMacros(userId,  {
-      'calories_min': caloriesMin.round(),
-      'calories_max': caloriesMax.round(),
-      'prot_min': protMin.round(),
-      'prot_max': protMax.round(),
-      'lipides_min': lipidesMin.round(),
-      'lipides_max': lipidesMax.round(),
-      'glucides_min': glucidesMin.round(),
-      'glucides_max': glucidesMax.round(),
-      'fibres_min': fibresMin.round(),
-      'fibres_max': fibresMax.round(),
-    });
+  await LocalStorageService.saveMacros(_userId, {
+    'calories_min': caloriesMin.round(),
+    'calories_max': caloriesMax.round(),
+    'prot_min': protMin.round(),
+    'prot_max': protMax.round(),
+    'lipides_min': lipidesMin.round(),
+    'lipides_max': lipidesMax.round(),
+    'glucides_min': glucidesMin.round(),
+    'glucides_max': glucidesMax.round(),
+    'fibres_min': fibresMin.round(),
+    'fibres_max': fibresMax.round(),
+  });
   }
-  }
-  
+
   Future<void> _monterCalories() async {
   // Augmente les calories min/max de 100
   setState(() {
@@ -655,28 +869,24 @@ Future<void> _initializeData() async {
     
   });
 
-  // Sauvegarde en local
-  final userId = FirebaseAuth.instance.currentUser?.uid;
-  if (userId != null) {
-    await LocalStorageService.saveMacros(userId, {
-      'calories_min': caloriesMin.round(),
-      'calories_max': caloriesMax.round(),
-      'prot_min': protMin.round(),
-      'prot_max': protMax.round(),
-      'lipides_min': lipidesMin.round(),
-      'lipides_max': lipidesMax.round(),
-      'glucides_min': glucidesMin.round(),
-      'glucides_max': glucidesMax.round(),
-      'fibres_min': fibresMin.round(),
-      'fibres_max': fibresMax.round(),
-    });
-  }
+  await LocalStorageService.saveMacros(_userId, {
+    'calories_min': caloriesMin.round(),
+    'calories_max': caloriesMax.round(),
+    'prot_min': protMin.round(),
+    'prot_max': protMax.round(),
+    'lipides_min': lipidesMin.round(),
+    'lipides_max': lipidesMax.round(),
+    'glucides_min': glucidesMin.round(),
+    'glucides_max': glucidesMax.round(),
+    'fibres_min': fibresMin.round(),
+    'fibres_max': fibresMax.round(),
+  });
   }
 
 
   static const double gap = 35; // 40
   static const double ajustBoutonheight = 30; // 30
-  static const double topBarH = 85; // 85
+  static const double topBarH = 96; // 96 (+11 pour le bouton "Aujourd'hui" au-dessus des chevrons)
   static const double ajustBoutonWidth = 50; // 50
 
   // ── Calendrier & navigation par date ────────────────────────────────────
@@ -688,17 +898,14 @@ Future<void> _initializeData() async {
 
   // Recharge les aliments pour la date sélectionnée (sans toucher aux macros/profil)
   Future<void> _chargerDonneesPourDate() async {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) return;
-
     setState(() => _isLoading = true);
 
-    final aliments = await LocalStorageService.loadAlimentsDuJour(userId, _dateCourante);
+    final aliments = await LocalStorageService.loadAlimentsDuJour(_userId, _dateCourante);
     await _chargerAlimentsEtCompteurs(aliments);
 
     if (_estPasse) {
       // Jour passé : charger le snapshot figé (ou le plus proche disponible)
-      final macrosDuJour = await LocalStorageService.loadMacrosForDate(userId, _dateCourante);
+      final macrosDuJour = await LocalStorageService.loadMacrosForDate(_userId, _dateCourante);
       if (macrosDuJour != null) {
         setState(() {
           caloriesMin = macrosDuJour['calories_min']!;
@@ -732,7 +939,7 @@ Future<void> _initializeData() async {
       }
     } else {
       // Aujourd'hui ou futur : restaurer les macros courantes
-      final macrosCourantes = await LocalStorageService.loadMacros(userId);
+      final macrosCourantes = await LocalStorageService.loadMacros(_userId);
       if (macrosCourantes != null) {
         setState(() {
           caloriesMin = macrosCourantes['calories_min']!;
@@ -755,6 +962,8 @@ Future<void> _initializeData() async {
       await _verifierEtReinitialiserAliments();
     }
 
+    await _appliquerPins();
+
     setState(() => _isLoading = false);
   }
 
@@ -775,12 +984,8 @@ Future<void> _initializeData() async {
   }
 
   void _ouvrirCalendrier() async {
-    // Recharger la liste fraîche avant d'ouvrir
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId != null) {
-      final dates = await LocalStorageService.getJoursAvecDonnees(userId);
-      if (mounted) setState(() => _joursAvecDonnees = dates.toSet());
-    }
+    final dates = await LocalStorageService.getJoursAvecDonnees(_userId);
+    if (mounted) setState(() => _joursAvecDonnees = dates.toSet());
     if (!mounted) return;
 
     showGeneralDialog(
@@ -819,7 +1024,8 @@ Future<void> _initializeData() async {
     ];
 
     // Boîte "Non catégorisé" uniquement s'il y a des aliments sans repas
-    final sansCategorie = _alimentsDuJour.where((a) => a.repas == null).toList();
+    final sansCategorie = _alimentsDuJour.where((a) => a.repas == null).toList()
+      ..sort((a, b) => (a.estEpingle ? 1 : 0).compareTo(b.estEpingle ? 1 : 0));
     if (sansCategorie.isNotEmpty) {
       cards.add(_buildRepasCardGenerique('Non catégorisé', sansCategorie));
     }
@@ -827,8 +1033,18 @@ Future<void> _initializeData() async {
     return cards;
   }
 
+  Color _repasColor(Repas repas) {
+    switch (repas) {
+      case Repas.petitDejeuner: return const Color.fromARGB(133, 181, 165, 135); //Color(0xFFD4A040)
+      case Repas.dejeuner:      return const Color.fromARGB(134, 170, 144, 132); //Color(0xFFC06840)
+      case Repas.diner:         return const Color.fromARGB(146, 142, 157, 186); //Color(0xFF5878B0)
+      case Repas.collation:     return const Color.fromARGB(255, 145, 179, 168); //Color(0xFF40967A)
+    }
+  }
+
   Widget _buildRepasCard(Repas repas) {
-    final groupe = _alimentsDuJour.where((a) => a.repas == repas).toList();
+    final groupe = _alimentsDuJour.where((a) => a.repas == repas).toList()
+      ..sort((a, b) => (a.estEpingle ? 1 : 0).compareTo(b.estEpingle ? 1 : 0));
     return _buildRepasCardGenerique(repas.label, groupe, repas: repas);
   }
 
@@ -850,24 +1066,50 @@ Future<void> _initializeData() async {
       (acc, a) => acc + (a.aliment.getMacrosPourQuantite(a.quantite)['glucides'] ?? 0),
     );
 
+    final totalFib = aliments.fold<double>(
+      0,
+      (acc, a) => acc + (a.aliment.getMacrosPourQuantite(a.quantite)['fibres'] ?? 0),
+    );
+
     const colorVert  = Color(0xFF0BE754);
     const colorRouge = Color(0xFFBC5A56);
-    const colorMarron = Color(0xFFBC8C56); // 0x3ABC8C56
     final pctProt = totalKcal > 0 ? totalProt * 4 / totalKcal * 100 : 0;
     final pctLip  = totalKcal > 0 ? totalLip  * 9 / totalKcal * 100 : 0;
     final pctGluc = totalKcal > 0 ? totalGluc * 4 / totalKcal * 100 : 0;
-    final colorP = pctProt >= 15 ? colorVert : colorMarron;
+    final colorP = pctProt >= 15 ? colorVert : Colors.white;
     final colorL = pctLip  <= 40 ? colorVert : colorRouge;
     final colorG = pctGluc <= 60 ? colorVert : colorRouge;
+    final colorF = totalFib >= 0.014 * totalKcal ? colorVert : Colors.white;
+
+    const hue = 151.0;
+    const sat = 0.5;
+    final couleurP = HSLColor.fromAHSL(1.0, hue, sat, 0.80).toColor();
+    final couleurL = HSLColor.fromAHSL(1.0, hue, sat, 0.60).toColor();
+    final couleurG = HSLColor.fromAHSL(1.0, hue, sat, 0.40).toColor();
+    const couleurF = Color(0xFF9C8FD4);
 
     // La clé dans _repasExpanded : nom de l'enum pour les repas, label sinon
     final expandedKey = repas?.name ?? label;
     final ouvert = _repasExpanded[expandedKey] ?? true;
 
-    return Container(
-      width: MediaQuery.of(context).size.width * 0.85,
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      clipBehavior: Clip.antiAlias,
+    // ── Calcul automatique de la taille de police ──────────────────────────────
+    // Contexte le plus serré : header avec ⓘ(36)+gap(6)++(36) = 78px + padding h(30)
+    final double cardWidth = (MediaQuery.of(context).size.width * 0.9).clamp(0.0, 420.0);
+    final double available = cardWidth - 30.0 - 78.0 - 8.0; // 8px marge de sécurité
+    // Coefficients Roboto : "1234 kcal" ≈ 4.7×f, "G 999g" ≈ 3.5×f
+    // 5 cellules (kcal + P + L + G + F), 4 espaces de _gap
+    final double fontSize = ((available - 4 * _gap) / (4.7 + 4 * 3.5)).clamp(8.0, 16.0);
+    final double cellKcal  = 4.7 * fontSize;
+    final double cellMacro = 3.5 * fontSize;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: cardWidth,
+            clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: const Color(0xFF4A4A4A),
         borderRadius: BorderRadius.circular(16),
@@ -876,84 +1118,158 @@ Future<void> _initializeData() async {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // En-tête : chevron + nom/kcal + bouton +
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
-            child: Row(
-              children: [
-                // Chevron rotatif dans une zone carrée fixe
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => setState(() => _repasExpanded[expandedKey] = !ouvert),
-                  child: SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: Center(
-                      child: AnimatedRotation(
-                        turns: ouvert ? 0.25 : 0.0,
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeInOut,
-                        child: const Icon(
-                          Icons.chevron_right,
-                          color: Colors.white70,
-                          size: 20,
+          // ── BLOC PERSISTANT — toujours visible, fond foncé, cliquable pour replier ──
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => setState(() => _repasExpanded[expandedKey] = !ouvert),
+            child: Container(
+              decoration: BoxDecoration(
+                color: repas == null ? Colors.black : null,
+                gradient: repas != null
+                    ? LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [_repasColor(repas), Colors.black],
+                        stops: const [0.0, 0.80],
+                      )
+                    : null,
+                borderRadius: BorderRadius.vertical(
+                  top: const Radius.circular(15),
+                  bottom: (!ouvert || aliments.isEmpty) ? const Radius.circular(15) : Radius.zero,
+                ),
+              ),
+              padding: const EdgeInsets.fromLTRB(20, 10, 10, 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              label,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            AnimatedRotation(
+                              turns: ouvert ? 0.25 : 0.0,
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeInOut,
+                              child: const Icon(Icons.chevron_right, color: Colors.white, size: 18),
+                            ),
+                          ],
+                        ),
+                        if (aliments.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Row(children: [
+                              _totalCell('', totalKcal, Colors.white, fontSize: fontSize, cellWidth: cellKcal, isKcal: true),
+                              SizedBox(width: _gap),
+                              _totalCell('P', totalProt, couleurP, fontSize: fontSize, cellWidth: cellMacro),
+                              SizedBox(width: _gap),
+                              _totalCell('L', totalLip, couleurL, fontSize: fontSize, cellWidth: cellMacro),
+                              SizedBox(width: _gap),
+                              _totalCell('G', totalGluc, couleurG, fontSize: fontSize, cellWidth: cellMacro),
+                              SizedBox(width: _gap),
+                              _totalCell('F', totalFib, couleurF, fontSize: fontSize, cellWidth: cellMacro),
+                            ]),
+                          ),
+                          if (_macroChipsVisibles.contains(expandedKey)) ...[
+                            const SizedBox(height: 6),
+                            Row(children: [
+                              SizedBox(width: cellKcal + _gap), // aligne sur colonne P
+                              SizedBox(width: cellMacro, child: Align(alignment: Alignment.centerLeft, child: _MacroChip(pct: pctProt.round(), color: colorP))),
+                              SizedBox(width: _gap),
+                              SizedBox(width: cellMacro, child: Align(alignment: Alignment.centerLeft, child: _MacroChip(pct: pctLip.round(), color: colorL))),
+                              SizedBox(width: _gap),
+                              SizedBox(width: cellMacro, child: Align(alignment: Alignment.centerLeft, child: _MacroChip(pct: pctGluc.round(), color: colorG))),
+                              SizedBox(width: _gap),
+                              SizedBox(width: cellMacro, child: Align(alignment: Alignment.centerLeft, child: _FibreChip(color: colorF))),
+                            ]),
+                          ],
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (aliments.isNotEmpty) ...[
+                    GestureDetector(
+                      onTap: () => _afficherMacroChips(expandedKey),
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withAlpha(15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white.withAlpha(30), width: 0.5),
+                        ),
+                        child: const Icon(Icons.info_outline, color: Colors.white54, size: 18),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  if (repas != null)
+                    GestureDetector(
+                      onTap: () {
+                        if (_modeEdition) {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              backgroundColor: const Color(0xFF2A2A2A),
+                              content: Text(
+                                'Supprimer tous les aliments de "${repas.label}" ?',
+                                style: const TextStyle(color: Colors.white70, fontSize: 14),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx),
+                                  child: const Text('Annuler', style: TextStyle(color: Colors.white70)),
+                                ),
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.pop(ctx);
+                                    setState(() => _alimentsDuJour.removeWhere((a) => a.repas == repas));
+                                    LocalStorageService.saveAlimentsDuJour(_userId, _alimentsDuJour, _dateCourante);
+                                  },
+                                  child: const Text('Supprimer', style: TextStyle(color: Color(0xFFE87B7B))),
+                                ),
+                              ],
+                            ),
+                          );
+                        } else {
+                          _ouvrirListeAliments(repas);
+                        }
+                      },
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: _modeEdition ? const Color(0xFFBC5A56) : const Color(0xFF357E50),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          _modeEdition ? Icons.delete_forever_rounded : Icons.add,
+                          color: _modeEdition ? Colors.black : Colors.white,
+                          size: 25,
                         ),
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        label,
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                      Text(
-                        '${totalKcal.toStringAsFixed(0)} kcal',
-                        style: const TextStyle(
-                          color: Color(0xFF9E9E9E),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (aliments.isNotEmpty) ...[
-                  _MacroChip(label: 'P', value: totalProt, pct: pctProt.round(), color: colorP),
-                  const SizedBox(width: 6),
-                  _MacroChip(label: 'L', value: totalLip, pct: pctLip.round(), color: colorL),
-                  const SizedBox(width: 6),
-                  _MacroChip(label: 'G', value: totalGluc, pct: pctGluc.round(), color: colorG),
-                  const SizedBox(width: 6),
                 ],
-                if (repas != null)
-                  GestureDetector(
-                    onTap: () => _ouvrirListeAliments(repas),
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF357E50),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.add, color: Colors.white, size: 18),
-                    ),
-                  ),
-              ],
+              ),
             ),
           ),
-          // Aliments de ce repas (animés)
+          // ── LISTE DES ALIMENTS (repliable) ───────────────────────────────────
           AnimatedSize(
             duration: const Duration(milliseconds: 220),
             curve: Curves.easeInOut,
@@ -962,7 +1278,7 @@ Future<void> _initializeData() async {
                     children: [
                       const Divider(color: Color(0x18FFFFFF), height: 1),
                       const SizedBox(height: _espacementAliments),
-                      ...aliments.map(_buildAlimentTile),
+                      ...aliments.map((a) => _buildAlimentTile(a, fontSize: fontSize, cellKcal: cellKcal, cellMacro: cellMacro, modeEdition: _modeEdition)),
                       const SizedBox(height: _espacementAliments),
                     ],
                   )
@@ -970,31 +1286,87 @@ Future<void> _initializeData() async {
           ),
         ],
       ),
+          ),
+          if (!ouvert && aliments.isNotEmpty) ...[
+            Container(
+              width: cardWidth - 36,
+              height: 6,
+              decoration: BoxDecoration(
+                color: const Color(0xFF3E3E3E),
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                border: Border.all(color: Colors.white.withAlpha(18), width: 1),
+              ),
+            ),
+            Container(
+              width: cardWidth - 52,
+              height: 5,
+              decoration: BoxDecoration(
+                color: const Color(0xFF333333),
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(10)),
+                border: Border.all(color: Colors.white.withAlpha(10), width: 1),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
-  Widget _buildAlimentTile(AlimentConsomme a) {
+  Widget _totalCell(String lbl, double? value, Color labelColor, {required double fontSize, required double cellWidth, bool isKcal = false}) {
+    final valStr = value?.toStringAsFixed(0) ?? '0';
+    return SizedBox(
+      width: cellWidth,
+      child: RichText(
+        maxLines: 1,
+        text: TextSpan(children: isKcal
+          ? [
+              TextSpan(text: valStr, style: TextStyle(color: Colors.white, fontSize: fontSize, fontWeight: FontWeight.w600)),
+              TextSpan(text: ' kcal', style: TextStyle(color: Colors.white70, fontSize: fontSize, fontWeight: FontWeight.w400)),
+            ]
+          : [
+              TextSpan(text: '$lbl ', style: TextStyle(color: labelColor, fontSize: fontSize, fontWeight: FontWeight.w700)),
+              TextSpan(text: valStr, style: TextStyle(color: Colors.white, fontSize: fontSize, fontWeight: FontWeight.w600)),
+              TextSpan(text: 'g', style: TextStyle(color: Colors.white70, fontSize: fontSize, fontWeight: FontWeight.w400)),
+            ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAlimentTile(AlimentConsomme a, {required double fontSize, required double cellKcal, required double cellMacro, bool modeEdition = false}) {
     return _SwipeableAlimentTile(
       key: ObjectKey(a),
       alimentConsomme: a,
+      estPasse: _estPasse,
       onDelete: () => _supprimerAliment(a),
       onModify: () => _modifierAliment(a),
       onUpdateQuantite: (q) => _mettreAJourQuantite(a, q),
+      onTogglePin: () => _togglePin(a),
+      onDeplacer: (repas) => _deplacerAliment(a, repas),
+      macroFontSize: fontSize,
+      macroCellKcal: cellKcal,
+      macroCellMacro: cellMacro,
+      modeEdition: modeEdition,
     );
   }
 
-  // UI
+  Future<void> _deplacerAliment(AlimentConsomme a, Repas repasDestination) async {
+    setState(() => a.repas = repasDestination);
+    await LocalStorageService.saveAlimentsDuJour(_userId, _alimentsDuJour, _dateCourante);
+  }
+
+  // UI tableau de bord
   @override
   Widget build(BuildContext context) {
 
-    final double barWidth = (MediaQuery.of(context).size.width * 0.85).clamp(0.0, 420.0);
+    final double barWidth = (MediaQuery.of(context).size.width * 0.9).clamp(0.0, 420.0); //0.85
     final double separatorWidth = (0.5 * barWidth) - ajustBoutonWidth;
 
     // double screenWidth = MediaQuery.of(context).size.width; // TAILLE DE L'ECRAN pour RESPONSIVE
 
     if (_isLoading) {
       return Scaffold(
-        backgroundColor: const Color(0xFF393939),
+        backgroundColor: const Color(0xFF393939), // 0xFF393939
         body: const Center(
       child: CircularProgressIndicator(color: Color(0xFF357E50)),
     ),
@@ -1004,7 +1376,7 @@ Future<void> _initializeData() async {
 
   
     return Scaffold(
-      backgroundColor: const Color(0xFF393939),
+      backgroundColor: const Color.fromARGB(255, 43, 43, 43), //Color(0xFF393939)
       body: SafeArea(
 
       child: Center( // Centre horizontalement
@@ -1047,26 +1419,58 @@ Future<void> _initializeData() async {
             if (!_estPasse) Column(
   children: [
     SizedBox(
-      height: ajustBoutonheight,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+      width: barWidth,
+      child: Stack(
+        alignment: Alignment.center,
         children: [
 
-          // Bouton gauche (-) — actif seulement si débloqué
-          SizedBox(
-            width: ajustBoutonWidth, //(dashbarWidth - (separatorWidth) ) /2,
+          // Centre : "Ajuster les besoins" (bloqué) ou "Valider" (débloqué)
+          // Détermine la hauteur du Stack
+          _ajustementDebloque
+              ? GestureDetector(
+                  onTap: () => setState(() => _ajustementDebloque = false),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF357E50),
+                      borderRadius: BorderRadius.circular(ajustBoutonheight),
+                    ),
+                    child: const Text(
+                      "Valider",
+                      style: TextStyle(fontSize: 14, color: Colors.white),
+                    ),
+                  ),
+                )
+              : GestureDetector(
+                  onTap: () => setState(() => _ajustementDebloque = true),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color.fromARGB(147, 2, 2, 2),
+                      borderRadius: BorderRadius.circular(ajustBoutonheight),
+                    ),
+                    child: const Text(
+                      "Ajuster les besoins",
+                      softWrap: false,
+                      style: TextStyle(fontSize: 14, color: Colors.white),
+                    ),
+                  ),
+                ),
+
+          // Bouton − à 25% de barWidth
+          Positioned(
+            left: barWidth * 0.25 - ajustBoutonWidth / 2,
+            top: 0,
+            bottom: 0,
+            width: ajustBoutonWidth,
             child: GestureDetector(
-              onTap: _ajustementDebloque ? _baisserCalories : null, // 👇 Personnalise ici le comportement du bouton -
+              onTap: _ajustementDebloque ? _baisserCalories : null,
               child: Container(
                 decoration: BoxDecoration(
                   color: _ajustementDebloque
                       ? const Color.fromARGB(115, 43, 43, 43)
                       : Colors.transparent,
-                  borderRadius: BorderRadius.circular(ajustBoutonheight
-                    // topLeft: Radius.circular(ajustBoutonheight),
-                    // bottomLeft: Radius.circular(ajustBoutonheight),
-                  ),
-                  //border: Border.all(color: Colors.white, width: 1),
+                  borderRadius: BorderRadius.circular(ajustBoutonheight),
                 ),
                 child: Center(
                   child: Icon(
@@ -1078,64 +1482,20 @@ Future<void> _initializeData() async {
             ),
           ),
 
-          // Centre : "Ajuster les besoins" (bloqué) ou "Valider" (débloqué)
-          SizedBox(
-            width: separatorWidth,
-            height: ajustBoutonheight,
-            child: Center(
-              child: _ajustementDebloque
-                  ? GestureDetector(
-                      onTap: () => setState(() => _ajustementDebloque = false),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF357E50),
-                          borderRadius: BorderRadius.circular(ajustBoutonheight),
-                        ),
-                        child: Text(
-                          "Valider",
-                          style: TextStyle(
-                            fontSize: ajustBoutonheight / 3,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    )
-                  : GestureDetector(
-                      onTap: () => setState(() => _ajustementDebloque = true),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: const Color.fromARGB(115, 43, 43, 43),
-                          borderRadius: BorderRadius.circular(ajustBoutonheight),
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          "Ajuster les besoins",
-                          style: TextStyle(
-                            fontSize: ajustBoutonheight / 3,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-            ),
-          ),
-
-          // Bouton droit (+) — actif seulement si débloqué
-          SizedBox(
-            width: ajustBoutonWidth, //(dashbarWidth - separatorWidth) /2,
+          // Bouton + à 75% de barWidth
+          Positioned(
+            left: barWidth * 0.75 - ajustBoutonWidth / 2,
+            top: 0,
+            bottom: 0,
+            width: ajustBoutonWidth,
             child: GestureDetector(
-              onTap: _ajustementDebloque ? _monterCalories : null, // 👇 Personnalise ici le comportement du bouton +
+              onTap: _ajustementDebloque ? _monterCalories : null,
               child: Container(
                 decoration: BoxDecoration(
                   color: _ajustementDebloque
                       ? const Color.fromARGB(115, 43, 43, 43)
                       : Colors.transparent,
-                  borderRadius: BorderRadius.circular(ajustBoutonheight
-                    // topRight: Radius.circular(ajustBoutonheight),
-                    // bottomRight: Radius.circular(ajustBoutonheight),
-                  ),
-                  //border: Border.all(color: Colors.white, width: 1),
+                  borderRadius: BorderRadius.circular(ajustBoutonheight),
                 ),
                 child: Center(
                   child: Icon(
@@ -1171,7 +1531,7 @@ Future<void> _initializeData() async {
           child: Text(
             "Calcul automatique",
             style: TextStyle(
-              fontSize: ajustBoutonheight / 3,
+              fontSize: 14, //ajustBoutonheight / 3,
               color: Colors.white54,
             ),
           ),
@@ -1218,6 +1578,7 @@ Future<void> _initializeData() async {
               valeurMax: fibresMax,
               compteurCalories: compteurFibres,
               barWidth: barWidth,
+              showMaxBorne: false,
             ),
 
             // const SizedBox(height: gap),
@@ -1246,20 +1607,66 @@ Future<void> _initializeData() async {
             //   ),
             // ),
 
-            const SizedBox(height: gap),
+            const SizedBox(height: gap*1.5),
             
             // const SizedBox(height: 50),
 
             Center(
-              
-              child : const Text(
-              'Aliments consommés',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+              child: SizedBox(
+                width: (MediaQuery.of(context).size.width * 0.9).clamp(0.0, 420.0),
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 20, right: 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Aliments consommés',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => setState(() {
+                          if (_modeEdition) {
+                            _modeEdition = false;
+                          } else {
+                            _modeEdition = true;
+                            for (final key in _repasExpanded.keys.toList()) {
+                              _repasExpanded[key] = true;
+                            }
+                          }
+                        }),
+                        child: _modeEdition
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF357E50),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'Terminer',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            )
+                          : const Text(
+                              'Éditer',
+                              style: TextStyle(
+                                color: Color(0xFF0BE754),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
             ),
             
             const SizedBox(height: 10),
@@ -1289,40 +1696,61 @@ Future<void> _initializeData() async {
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   alignment: Alignment.bottomCenter,
                   color: Colors.black.withAlpha(0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Flèche jour précédent
-                      IconButton(
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        icon: const Icon(Icons.chevron_left, color: Colors.white, size: 22),
-                        onPressed: () => _selectionnerDate(
-                          _dateSelectionnee.subtract(const Duration(days: 1))),
-                      ),
-                      const SizedBox(width: 16),
-                      // Date — tap pour ouvrir le calendrier
+                      // Bouton "Aujourd’hui" : vert si sur aujourd’hui (ouvre calendrier), grisé sinon (revient à aujourd’hui)
                       GestureDetector(
-                        onTap: _ouvrirCalendrier,
+                        onTap: _estAujourdhui
+                            ? _ouvrirCalendrier
+                            : () => _selectionnerDate(DateTime.now()),
                         child: Text(
-                          _estAujourdhui
-                              ? "Aujourd’hui"
-                              : _formatDateCourte(_dateSelectionnee),
-                          style: const TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                          "AUJOURD'HUI",
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 1.5,
+                            color: _estAujourdhui
+                                ? const Color.fromARGB(255, 121, 247, 167)
+                                : Colors.white38,
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      // Flèche jour suivant (grisée si aujourd’hui)
-                      IconButton(
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        icon: Icon(Icons.chevron_right,
-                            color: _estALimite ? Colors.white24 : Colors.white, size: 22),
-                        onPressed: _estALimite
-                            ? null
-                            : () => _selectionnerDate(
-                                _dateSelectionnee.add(const Duration(days: 1))),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Flèche jour précédent
+                          IconButton(
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            icon: const Icon(Icons.chevron_left, color: Colors.white, size: 22),
+                            onPressed: () => _selectionnerDate(
+                              _dateSelectionnee.subtract(const Duration(days: 1))),
+                          ),
+                          const SizedBox(width: 16),
+                          // Date — tap pour ouvrir le calendrier
+                          GestureDetector(
+                            onTap: _ouvrirCalendrier,
+                            child: Text(
+                              _formatDateCourte(_dateSelectionnee),
+                              style: const TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          // Flèche jour suivant (grisée si à la limite)
+                          IconButton(
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            icon: Icon(Icons.chevron_right,
+                                color: _estALimite ? Colors.white24 : Colors.white, size: 22),
+                            onPressed: _estALimite
+                                ? null
+                                : () => _selectionnerDate(
+                                    _dateSelectionnee.add(const Duration(days: 1))),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -1357,7 +1785,7 @@ Future<void> _initializeData() async {
       child: BottomAppBar(
         height: 62,
         padding: EdgeInsets.zero,
-        color: Color(0xFF676464).withAlpha(150),
+        color: Color(0xFF393939).withAlpha(200),
 
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -1432,6 +1860,41 @@ Future<void> _initializeData() async {
       ),
       ),
             ),
+
+          if (_modeEdition)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 72,
+              child: Center(
+                child: GestureDetector(
+                  onTap: () => setState(() => _modeEdition = false),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF357E50),
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(100),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Text(
+                      'Terminer',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
           ],
       ),
       ),
@@ -1472,6 +1935,9 @@ class _NavItem extends StatelessWidget {
             if (label.isNotEmpty) const SizedBox(height: 2),
             if (label.isNotEmpty) Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textScaler: TextScaler.noScaling,
               style: const TextStyle(
                 color: Colors.white54,
                 fontSize: 9,
@@ -1521,7 +1987,7 @@ class _PieChartPainter extends CustomPainter {
 
     // Lignes de séparation dans la couleur du fond
     final sep = Paint()
-      ..color = const Color(0xFF676464)
+      ..color = const Color(0xFF393939)
       ..strokeWidth = 1.2
       ..style = PaintingStyle.stroke;
 
@@ -1541,45 +2007,42 @@ class _PieChartPainter extends CustomPainter {
 // ── Mini-chip de macronutriment pour l'en-tête de repas ──────────────────────
 
 class _MacroChip extends StatelessWidget {
-  final String label;
-  final double value;
   final int pct;
   final Color color;
 
-  const _MacroChip({required this.label, required this.value, required this.pct, required this.color});
+  const _MacroChip({required this.pct, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 44,
-      height: 36,
-      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
       decoration: BoxDecoration(
         color: color.withAlpha(30),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withAlpha(70), width: 0.5),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withAlpha(120), width: 0.5),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          RichText(
-            text: TextSpan(children: [
-              TextSpan(
-                text: '$label ',
-                style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w700),
-              ),
-              TextSpan(
-                text: '$pct%',
-                style: const TextStyle(color: Colors.white70, fontSize: 10),
-              ),
-            ]),
-          ),
-          Text(
-            '${value.toStringAsFixed(0)}g',
-            style: const TextStyle(color: Colors.white38, fontSize: 12),
-          ),
-        ],
+      child: Text(
+        '$pct%',
+        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
       ),
+    );
+  }
+}
+
+class _FibreChip extends StatelessWidget {
+  final Color color;
+  const _FibreChip({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withAlpha(30),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withAlpha(120), width: 0.5),
+      ),
+      child: Icon(Icons.eco, color: color, size: 11),
     );
   }
 }
@@ -1591,6 +2054,13 @@ class _SwipeableAlimentTile extends StatefulWidget {
   final VoidCallback onDelete;
   final VoidCallback onModify;
   final Function(double) onUpdateQuantite;
+  final VoidCallback onTogglePin;
+  final Function(Repas) onDeplacer;
+  final bool estPasse;
+  final double macroFontSize;
+  final double macroCellKcal;
+  final double macroCellMacro;
+  final bool modeEdition;
 
   const _SwipeableAlimentTile({
     super.key,
@@ -1598,6 +2068,13 @@ class _SwipeableAlimentTile extends StatefulWidget {
     required this.onDelete,
     required this.onModify,
     required this.onUpdateQuantite,
+    required this.onTogglePin,
+    required this.onDeplacer,
+    required this.estPasse,
+    required this.macroFontSize,
+    required this.macroCellKcal,
+    required this.macroCellMacro,
+    this.modeEdition = false,
   });
 
   @override
@@ -1642,32 +2119,153 @@ class _SwipeableAlimentTileState extends State<_SwipeableAlimentTile>
   void _onDragUpdate(DragUpdateDetails d) {
     if (_ctrl.isAnimating) _ctrl.stop();
     setState(() {
-      _offset = (_offset + d.delta.dx).clamp(-_revealWidth, 0);
+      final maxRight = widget.estPasse ? 0.0 : _revealWidth;
+      _offset = (_offset + d.delta.dx).clamp(-_revealWidth, maxRight);
     });
   }
 
   void _onDragEnd(DragEndDetails d) {
     final velocity = d.primaryVelocity ?? 0;
-    final shouldOpen =
-        velocity < -300 || (_offset < -_revealWidth / 2 && velocity <= 300);
-    _snapTo(shouldOpen ? -_revealWidth : 0);
+    if (_offset <= 0) {
+      // Swipe gauche → supprimer
+      final shouldOpen = velocity < -300 || (_offset < -_revealWidth / 2 && velocity <= 300);
+      _snapTo(shouldOpen ? -_revealWidth : 0);
+    } else {
+      // Swipe droit → épingler
+      final shouldOpen = velocity > 300 || (_offset > _revealWidth / 2 && velocity >= -300);
+      _snapTo(shouldOpen ? _revealWidth : 0);
+    }
   }
 
-  Widget _macroCell(String label, double? value, Color labelColor, double width, {bool isKcal = false}) {
-    const fontSize = 11.0; // ← taille de la ligne macro
+  void _ouvrirMenuContextuel(LongPressStartDetails details) {
+    if (_offset != 0) return;
+    HapticFeedback.lightImpact();
+    final a = widget.alimentConsomme;
+
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final position = RelativeRect.fromRect(
+      Rect.fromLTWH(details.globalPosition.dx, details.globalPosition.dy, 0, 0),
+      Offset.zero & overlay.size,
+    );
+
+    showMenu<String>(
+      context: context,
+      position: position,
+      color: const Color(0xFF2A2A2A),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 10,
+      items: [
+        if (!widget.estPasse) ...[
+          PopupMenuItem<String>(
+            value: 'pin',
+            child: Row(children: [
+              Icon(
+                a.estEpingle ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+                color: const Color(0xFFF0A83A),
+                size: 18,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                a.estEpingle ? 'Arrêter la répétition' : 'Ajouter chaque jour',
+                style: const TextStyle(color: Color(0xFFF0A83A), fontSize: 14),
+              ),
+            ]),
+          ),
+          PopupMenuItem<String>(
+            value: 'move',
+            child: Row(children: [
+              const Icon(Icons.drive_file_move_outline, color: Colors.white70, size: 18),
+              const SizedBox(width: 12),
+              const Text('Déplacer dans un autre repas', style: TextStyle(color: Colors.white70, fontSize: 14)),
+            ]),
+          ),
+        ],
+        PopupMenuItem<String>(
+          value: 'delete',
+          child: Row(children: [
+            const Icon(Icons.delete_outline_rounded, color: Color(0xFFE87B7B), size: 18),
+            const SizedBox(width: 12),
+            const Text('Supprimer du repas', style: TextStyle(color: Color(0xFFE87B7B), fontSize: 14)),
+          ]),
+        ),
+      ],
+    ).then((value) {
+      if (value == 'pin') widget.onTogglePin();
+      if (value == 'move') _ouvrirSelectionRepas();
+      if (value == 'delete') widget.onDelete();
+    });
+  }
+
+  void _ouvrirSelectionRepas() {
+    final repasActuel = widget.alimentConsomme.repas;
+    final repasDisponibles = Repas.values.where((r) => r != repasActuel).toList();
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF2A2A2A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Déplacer vers…',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 16),
+              ...repasDisponibles.map((repas) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    widget.onDeplacer(repas);
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4A4A4A),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.restaurant_menu, color: Color(0xFF357E50), size: 18),
+                        const SizedBox(width: 12),
+                        Text(repas.label, style: const TextStyle(color: Colors.white, fontSize: 15)),
+                        const Spacer(),
+                        const Icon(Icons.chevron_right, color: Colors.white38, size: 18),
+                      ],
+                    ),
+                  ),
+                ),
+              )),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _macroCell(String label, double? value, Color labelColor, {required double fontSize, required double cellWidth, bool isKcal = false}) {
     final valStr = value?.toStringAsFixed(0) ?? '0';
     return SizedBox(
-      width: width,
+      width: cellWidth,
       child: RichText(
+        maxLines: 1,
         text: TextSpan(children: isKcal
           ? [
-              TextSpan(text: valStr, style: const TextStyle(color: Colors.grey, fontSize: fontSize, fontWeight: FontWeight.w500)),
-              TextSpan(text: ' kcal', style: const TextStyle(color: Colors.grey, fontSize: fontSize, fontWeight: FontWeight.w400)),
+              TextSpan(text: valStr, style: TextStyle(color: Colors.grey, fontSize: fontSize, fontWeight: FontWeight.w500)),
+              TextSpan(text: ' kcal', style: TextStyle(color: Colors.grey, fontSize: fontSize, fontWeight: FontWeight.w400)),
             ]
           : [
               TextSpan(text: '$label ', style: TextStyle(color: labelColor, fontSize: fontSize, fontWeight: FontWeight.w700)),
-              TextSpan(text: valStr, style: const TextStyle(color: Colors.grey, fontSize: fontSize, fontWeight: FontWeight.w500)),
-              TextSpan(text: 'g', style: const TextStyle(color: Colors.grey, fontSize: fontSize, fontWeight: FontWeight.w400)),
+              TextSpan(text: valStr, style: TextStyle(color: Colors.grey, fontSize: fontSize, fontWeight: FontWeight.w500)),
+              TextSpan(text: 'g', style: TextStyle(color: Colors.grey, fontSize: fontSize, fontWeight: FontWeight.w400)),
             ],
         ),
       ),
@@ -1682,7 +2280,33 @@ class _SwipeableAlimentTileState extends State<_SwipeableAlimentTile>
     return ClipRect(
       child: Stack(
         children: [
-          // Zone de suppression (derrière la carte, côté droit)
+          // Zone d'épinglage (derrière la carte, côté gauche — swipe droit)
+          if (!widget.estPasse)
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: _revealWidth,
+              child: GestureDetector(
+                onTap: () {
+                  widget.onTogglePin();
+                  _snapTo(0);
+                },
+                child: Container(
+                  color: const Color(0xFFCA7C35),
+                  child: Center(
+                    child: Icon(
+                      widget.alimentConsomme.estEpingle
+                          ? Icons.push_pin_rounded
+                          : Icons.push_pin_outlined,
+                      color: Colors.white,
+                      size: 26,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          // Zone de suppression (derrière la carte, côté droit — swipe gauche)
           Positioned.fill(
             child: Align(
               alignment: Alignment.centerRight,
@@ -1702,10 +2326,16 @@ class _SwipeableAlimentTileState extends State<_SwipeableAlimentTile>
             child: GestureDetector(
               onHorizontalDragUpdate: _onDragUpdate,
               onHorizontalDragEnd: _onDragEnd,
+              onLongPressStart: _ouvrirMenuContextuel,
               child: Container(
-                color: const Color(0xFF4A4A4A),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4A4A4A),
+                  border: a.estEpingle
+                      ? const Border(left: BorderSide(color: Color(0xFFCA7C35), width: 3))
+                      : null,
+                ),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: _espacementAliments),
+                  padding: EdgeInsets.fromLTRB(20, _espacementAliments, widget.modeEdition ? 10 : 20, _espacementAliments),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
@@ -1727,24 +2357,43 @@ class _SwipeableAlimentTileState extends State<_SwipeableAlimentTile>
                               final couleurP = HSLColor.fromAHSL(1.0, hue, sat, 0.80).toColor();
                               final couleurL = HSLColor.fromAHSL(1.0, hue, sat, 0.60).toColor();
                               final couleurG = HSLColor.fromAHSL(1.0, hue, sat, 0.40).toColor();
-                              return Row(children: [
-                                _macroCell('kcal', macros['calories'], Colors.white, 50, isKcal: true),
-                                const SizedBox(width: 8),
-                                _macroCell('P', macros['proteines'], couleurP, 35),
-                                const SizedBox(width: 8),
-                                _macroCell('L', macros['lipides'], couleurL, 35),
-                                const SizedBox(width: 8),
-                                _macroCell('G', macros['glucides'], couleurG, 35),
-                                if ((macros['fibres'] ?? 0) > 0) ...[
-                                  const SizedBox(width: 8),
-                                  _macroCell('F', macros['fibres'], const Color(0xFF9C8FD4), 35),
-                                ],
-                              ]);
+                              final f  = widget.macroFontSize;
+                              final ck = widget.macroCellKcal;
+                              final cm = widget.macroCellMacro;
+                              return FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Row(children: [
+                                  _macroCell('kcal', macros['calories'], Colors.white, fontSize: f, cellWidth: ck, isKcal: true),
+                                  SizedBox(width: _gap),
+                                  _macroCell('P', macros['proteines'], couleurP, fontSize: f, cellWidth: cm),
+                                  SizedBox(width: _gap),
+                                  _macroCell('L', macros['lipides'], couleurL, fontSize: f, cellWidth: cm),
+                                  SizedBox(width: _gap),
+                                  _macroCell('G', macros['glucides'], couleurG, fontSize: f, cellWidth: cm),
+                                  SizedBox(width: _gap),
+                                  _macroCell('F', macros['fibres'], const Color(0xFF9C8FD4), fontSize: f, cellWidth: cm),
+                                ]),
+                              );
                             }(),
                           ],
                         ),
                       ),
                       const SizedBox(width: 8),
+                      if (widget.modeEdition)
+                        GestureDetector(
+                          onTap: widget.onDelete,
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF4A4A4A),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.delete_forever_rounded, color: Colors.black, size: 26),
+                          ),
+                        )
+                      else
                       PopupMenuButton<String>(
                         padding: EdgeInsets.zero,
                         color: const Color(0xFF4A4A4A),
@@ -1755,26 +2404,24 @@ class _SwipeableAlimentTileState extends State<_SwipeableAlimentTile>
                             widget.onModify();
                           } else if (value == 'delete') {
                             widget.onDelete();
-                          } else if (value == 'portion') {
-                            widget.onUpdateQuantite(a.aliment.portions.first.poids);
+                          } else if (value.startsWith('p:')) {
+                            final i = int.parse(value.substring(2));
+                            widget.onUpdateQuantite(a.aliment.portions[i].poids);
                           } else {
                             widget.onUpdateQuantite(double.parse(value));
                           }
                         },
                         itemBuilder: (context) => [
                           if (a.aliment.portions.isNotEmpty) ...[
-                            () {
-                              final p = a.aliment.portions.first;
-                              return PopupMenuItem<String>(
-                                value: 'portion',
-                                child: Text(
-                                  p.nom.isNotEmpty
-                                      ? '${p.nom} (${p.poids.toStringAsFixed(0)} g)'
-                                      : '${p.poids.toStringAsFixed(0)} g',
-                                  style: const TextStyle(color: Colors.white),
-                                ),
-                              );
-                            }(),
+                            ...a.aliment.portions.asMap().entries.map((e) => PopupMenuItem<String>(
+                              value: 'p:${e.key}',
+                              child: Text(
+                                e.value.nom.isNotEmpty
+                                    ? '${e.value.nom} (${e.value.poids.toStringAsFixed(0)} g)'
+                                    : '${e.value.poids.toStringAsFixed(0)} g',
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            )),
                             const PopupMenuDivider(),
                           ],
                           const PopupMenuItem(value: '5',   child: Text('5 g',   style: TextStyle(color: Colors.white))),
@@ -1785,7 +2432,7 @@ class _SwipeableAlimentTileState extends State<_SwipeableAlimentTile>
                           const PopupMenuItem(value: '150', child: Text('150 g', style: TextStyle(color: Colors.white))),
                           const PopupMenuItem(value: 'custom', child: Icon(Icons.edit, color: Colors.white, size: 18)),
                           const PopupMenuDivider(),
-                          const PopupMenuItem(value: 'delete', child: Text('Supprimer', style: TextStyle(color: Colors.redAccent))),
+                          const PopupMenuItem(value: 'delete', child: Text('Supprimer', style: TextStyle(color: Color(0xFFE87B7B)))),
                         ],
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

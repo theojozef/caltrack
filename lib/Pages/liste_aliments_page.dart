@@ -1,10 +1,11 @@
 ﻿import 'dart:async';
+import 'dart:io';
 
 import 'package:cal_track_v1/Pages/scancode_page.dart';
 import 'package:cal_track_v1/services/basededonnees.dart';
 import 'package:cal_track_v1/models/aliment.dart';
 import 'package:cal_track_v1/services/local_storage_service.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+// import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cal_track_v1/widgets/quantite_aliment.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -15,8 +16,9 @@ class ListeAlimentsPage extends StatefulWidget {
   // final Function(Aliment) onAlimentAjoute;
   final Function(Aliment, double, Portion, Repas?) onAlimentAjoute;
   final Repas? repasPreselectionne; // repas déjà connu (depuis le bouton + de la section)
+  final String? dateCourante; // date affichée dans le dashboard (yyyy-MM-dd)
 
-  const ListeAlimentsPage({super.key, required this.onAlimentAjoute, this.repasPreselectionne});
+  const ListeAlimentsPage({super.key, required this.onAlimentAjoute, this.repasPreselectionne, this.dateCourante});
 
   @override
   State<ListeAlimentsPage> createState() => _ListeAlimentsPageState();
@@ -30,10 +32,13 @@ class _ListeAlimentsPageState extends State<ListeAlimentsPage> {
   String _recherche = "";
   bool _isSearching = false;
   Set<String> _favoris = {};
+  String _userId = '';
+  int _ongletBas = 0; // 0 = Récents, 1 = Mes recettes
 
   // Buffer d'aliments en attente de validation (ajout multi-aliments)
   // Chaque entrée : {'aliment': Aliment, 'quantite': double, 'portionChoisie': Portion, 'repasChoisi': Repas?}
   final List<Map<String, dynamic>> _alimentsEnAttente = [];
+  List<AlimentConsomme> _alimentsHier = [];
 
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();
@@ -44,16 +49,68 @@ class _ListeAlimentsPageState extends State<ListeAlimentsPage> {
     _chargerAliments();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _searchFocusNode.requestFocus();
+      _verifierConnexion();
     });
   }
 
+  Future<void> _verifierConnexion() async {
+    try {
+      final result = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(seconds: 3));
+      if (result.isNotEmpty && result.first.rawAddress.isNotEmpty) return;
+    } catch (_) {}
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF2E2E2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.wifi_off_rounded, color: Colors.amber, size: 22),
+            SizedBox(width: 10),
+            Text(
+              'Accès limité',
+              style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Vous n\'êtes pas connecté à Internet.\n\n'
+          'La recherche reste disponible sur notre base locale de 5 000 aliments certifiés (CIQUAL).\n\n'
+          'Connectez-vous pour accéder à des millions de produits supplémentaires.',
+          style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF357E50),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('Compris', style: TextStyle(color: Colors.white)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _chargerAliments() async {
-    // Charger les favoris persistants avant la liste CSV
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId != null) {
-      _favoris = await LocalStorageService.loadFavoris(userId);
-      _recents = await LocalStorageService.loadRecents(userId);
-      _recentsQuantites = await LocalStorageService.loadRecentsQuantites(userId);
+    _userId = await LocalStorageService.getCurrentUserId();
+    _favoris = await LocalStorageService.loadFavoris(_userId);
+    _recents = await LocalStorageService.loadRecents(_userId);
+    _recentsQuantites = await LocalStorageService.loadRecentsQuantites(_userId);
+
+    if (widget.dateCourante != null && widget.repasPreselectionne != null) {
+      final parts = widget.dateCourante!.split('-');
+      final date = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+      final hierStr = LocalStorageService.formatDate(date.subtract(const Duration(days: 1)));
+      final tousHier = await LocalStorageService.loadAlimentsDuJour(_userId, hierStr);
+      _alimentsHier = tousHier.where((a) => a.repas == widget.repasPreselectionne).toList();
     }
 
     final liste = await chargerAlimentsDepuisCSV();
@@ -310,22 +367,19 @@ class _ListeAlimentsPageState extends State<ListeAlimentsPage> {
 
   void _ajouterAuBuffer(Aliment aliment, double quantite, Portion portionChoisie) {
     setState(() { aliment.dejaAjoute = true; });
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId != null) {
-      _favoris.add(aliment.nom);
-      LocalStorageService.saveFavoris(userId, _favoris);
-      _recents = [
-        aliment,
-        ..._recents.where((a) => a.nom != aliment.nom),
-      ].take(20).toList();
-      LocalStorageService.saveRecents(userId, _recents);
-      _recentsQuantites[aliment.nom] = {
-        'quantite': quantite,
-        'portionNom': portionChoisie.nom,
-        'portionPoids': portionChoisie.poids,
-      };
-      LocalStorageService.saveRecentsQuantites(userId, _recentsQuantites);
-    }
+    _favoris.add(aliment.nom);
+    LocalStorageService.saveFavoris(_userId, _favoris);
+    _recents = [
+      aliment,
+      ..._recents.where((a) => a.nom != aliment.nom),
+    ].take(20).toList();
+    LocalStorageService.saveRecents(_userId, _recents);
+    _recentsQuantites[aliment.nom] = {
+      'quantite': quantite,
+      'portionNom': portionChoisie.nom,
+      'portionPoids': portionChoisie.poids,
+    };
+    LocalStorageService.saveRecentsQuantites(_userId, _recentsQuantites);
     setState(() {
       _alimentsEnAttente.add({
         'aliment': aliment,
@@ -685,40 +739,40 @@ static const double heightsearch = 35;
                 ),
               ),
             ),
-            // Badge → menu déroulant : portion par défaut (si dispo) + presets grammes
-            PopupMenuButton<double>(
+            // Badge → menu déroulant : portions (si dispo) + presets grammes
+            PopupMenuButton<String>(
               color: const Color(0xFF4A4A4A),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               onSelected: (value) {
-                if (value.isNaN) {
+                if (value == 'edit') {
                   _ajouterAliment(context, aliment);
-                } else if (value == double.infinity && hasPortion) {
-                  _ajouterAuBuffer(aliment, 1.0, portion!);
+                } else if (value.startsWith('p:')) {
+                  final i = int.parse(value.substring(2));
+                  final p = aliment.portions[i];
+                  _ajouterAuBuffer(aliment, 1.0, p);
                 } else {
-                  _ajouterAuBuffer(aliment, value, Portion(nom: 'g', poids: value));
+                  final g = double.parse(value);
+                  _ajouterAuBuffer(aliment, g, Portion(nom: 'g', poids: g));
                 }
               },
               itemBuilder: (_) => [
-                if (hasPortion) ...[
-                  () {
-                    final p = aliment.portions.first;
-                    return PopupMenuItem<double>(
-                      value: double.infinity,
-                      child: Text(
-                        _formatQuantite(1.0, p),
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    );
-                  }(),
+                if (aliment.portions.isNotEmpty) ...[
+                  ...aliment.portions.asMap().entries.map((e) => PopupMenuItem<String>(
+                    value: 'p:${e.key}',
+                    child: Text(
+                      _formatQuantite(1.0, e.value),
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  )),
                   const PopupMenuDivider(),
                 ],
-                ...[10, 20, 30, 50, 100, 150].map((g) => PopupMenuItem<double>(
-                      value: g.toDouble(),
+                ...[10, 20, 30, 50, 100, 150].map((g) => PopupMenuItem<String>(
+                      value: '$g',
                       child: Text('$g g', style: const TextStyle(color: Colors.white)),
                     )),
                 const PopupMenuDivider(),
-                const PopupMenuItem<double>(
-                  value: double.nan,
+                const PopupMenuItem<String>(
+                  value: 'edit',
                   child: Icon(Icons.edit, color: Colors.white, size: 18),
                 ),
               ],
@@ -748,8 +802,174 @@ static const double heightsearch = 35;
     );
   }
 
+  Widget _buildTabBouton(String label, int index) {
+    final actif = _ongletBas == index;
+    return GestureDetector(
+      onTap: () => setState(() => _ongletBas = index),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: actif ? const Color(0xFF357E50) : Colors.transparent,
+              width: 2.5,
+            ),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: actif ? Colors.white : Colors.white38,
+            fontWeight: actif ? FontWeight.w600 : FontWeight.w400,
+            fontSize: 14,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOngletsBas() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+          child: Row(
+            children: [
+              Expanded(child: _buildTabBouton('Récents', 0)),
+              Expanded(child: _buildTabBouton('Mes recettes', 1)),
+            ],
+          ),
+        ),
+        const Divider(color: Color(0x22FFFFFF), height: 1),
+        if (_ongletBas == 0) ...[
+          if (_alimentsFiltres.isNotEmpty)
+            ..._alimentsFiltres.map((a) => _buildAlimentCard(a, useRecentsQty: true))
+          else
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(
+                child: Text(
+                  'Aucun aliment récent',
+                  style: TextStyle(color: Colors.white38, fontSize: 14),
+                ),
+              ),
+            ),
+        ] else ...[
+          const Padding(
+            padding: EdgeInsets.fromLTRB(24, 32, 24, 24),
+            child: Center(
+              child: Text(
+                'Cette fonctionnalité est en cours de développement.\nElle sera disponible dans une prochaine mise à jour.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white54, fontSize: 14, height: 1.6),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   // Contenu défilant : buffer + récents (champ vide) ou résultats de recherche.
   // Buffer et récents sont dans le même ListView pour défiler ensemble.
+  Widget _buildCommeHierCard(List<AlimentConsomme> alimentsManquants) {
+    double totalKcal = 0, totalProt = 0, totalLip = 0, totalGluc = 0, totalFib = 0;
+    for (final ac in alimentsManquants) {
+      final m = ac.aliment.getMacrosPourQuantite(ac.quantite);
+      totalKcal += m['calories'] ?? 0;
+      totalProt += m['proteines'] ?? 0;
+      totalLip += m['lipides'] ?? 0;
+      totalGluc += m['glucides'] ?? 0;
+      totalFib += m['fibres'] ?? 0;
+    }
+
+    final nomsCombines = alimentsManquants
+        .map((ac) => ac.aliment.nom.split(' ').first.replaceAll(RegExp(r'[^a-zA-ZÀ-ÖØ-öø-ÿ0-9]'), ''))
+        .join(' + ');
+
+    return Card(
+      color: const Color(0x12FFFFFF),
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // "+" blanc à gauche — identique aux cartes aliments
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() {
+                for (final ac in alimentsManquants) {
+                  _alimentsEnAttente.add({
+                    'aliment': ac.aliment,
+                    'quantite': ac.quantite,
+                    'portionChoisie': Portion(nom: 'g', poids: 1.0),
+                    'repasChoisi': widget.repasPreselectionne,
+                  });
+                }
+              }),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Text(
+                    '+',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Color(0xFF393939),
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      height: 1.0,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Nom combiné + macros totaux
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    nomsCombines,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${totalKcal.toStringAsFixed(0)} kcal - '
+                    'P${totalProt.toStringAsFixed(0)} | '
+                    'L${totalLip.toStringAsFixed(0)} | '
+                    'G${totalGluc.toStringAsFixed(0)}'
+                    '${totalFib > 0 ? ' | F${totalFib.toStringAsFixed(0)}' : ''}',
+                    style: const TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildListContent() {
     if (_recherche.isNotEmpty) {
       if (_alimentsFiltres.isEmpty) {
@@ -793,12 +1013,6 @@ static const double heightsearch = 35;
             ...autresResultats.map((a) => _buildAlimentCard(a)),
           ],
         ],
-      );
-    }
-
-    if (_alimentsFiltres.isEmpty && _alimentsEnAttente.isEmpty) {
-      return const Center(
-        child: Text('Aucun aliment trouvé', style: TextStyle(color: Colors.white)),
       );
     }
 
@@ -856,12 +1070,24 @@ static const double heightsearch = 35;
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    aliment.nom,
-                                    style: const TextStyle(
-                                        fontSize: 16,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold),
+                                  Row(
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          aliment.nom,
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 2,
+                                          style: const TextStyle(
+                                              fontSize: 16,
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                      if (aliment.isCiqual) ...[
+                                        const SizedBox(width: 5),
+                                        const Icon(Icons.verified, size: 18, color: Color(0xFF4DB6AC)),
+                                      ],
+                                    ],
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
@@ -881,43 +1107,42 @@ static const double heightsearch = 35;
                                 ],
                               ),
                             ),
-                            // Quantité — menu déroulant : portion par défaut (si dispo) + presets grammes + crayon
-                            PopupMenuButton<double>(
+                            // Quantité — menu déroulant : portions (si dispo) + presets grammes + crayon
+                            PopupMenuButton<String>(
                               color: const Color(0xFF4A4A4A),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               onSelected: (value) {
-                                if (value.isNaN) {
+                                if (value == 'edit') {
                                   _modifierAlimentEnAttente(index);
-                                } else if (value == double.infinity && aliment.portions.isNotEmpty) {
-                                  _changerQuantiteEnAttente(index, 1.0, aliment.portions.first);
+                                } else if (value.startsWith('p:')) {
+                                  final i = int.parse(value.substring(2));
+                                  _changerQuantiteEnAttente(index, 1.0, aliment.portions[i]);
                                 } else {
-                                  _changerQuantiteEnAttente(index, value, Portion(nom: 'g', poids: value));
+                                  final g = double.parse(value);
+                                  _changerQuantiteEnAttente(index, g, Portion(nom: 'g', poids: g));
                                 }
                               },
                               itemBuilder: (_) => [
                                 if (aliment.portions.isNotEmpty) ...[
-                                  () {
-                                    final p = aliment.portions.first;
-                                    return PopupMenuItem<double>(
-                                      value: double.infinity,
-                                      child: Text(
-                                        p.nom.isNotEmpty
-                                            ? '${p.nom} (${p.poids.toStringAsFixed(0)} g)'
-                                            : '${p.poids.toStringAsFixed(0)} g',
-                                        style: const TextStyle(color: Colors.white),
-                                      ),
-                                    );
-                                  }(),
+                                  ...aliment.portions.asMap().entries.map((e) => PopupMenuItem<String>(
+                                    value: 'p:${e.key}',
+                                    child: Text(
+                                      e.value.nom.isNotEmpty
+                                          ? '${e.value.nom} (${e.value.poids.toStringAsFixed(0)} g)'
+                                          : '${e.value.poids.toStringAsFixed(0)} g',
+                                      style: const TextStyle(color: Colors.white),
+                                    ),
+                                  )),
                                   const PopupMenuDivider(),
                                 ],
-                                ...[10, 20, 30, 50, 100, 150].map((g) => PopupMenuItem<double>(
-                                      value: g.toDouble(),
+                                ...[10, 20, 30, 50, 100, 150].map((g) => PopupMenuItem<String>(
+                                      value: '$g',
                                       child: Text('$g g', style: const TextStyle(color: Colors.white)),
                                     )),
                                 const PopupMenuDivider(),
-                                PopupMenuItem<double>(
-                                  value: double.nan,
-                                  child: const Icon(Icons.edit, color: Colors.white, size: 18),
+                                const PopupMenuItem<String>(
+                                  value: 'edit',
+                                  child: Icon(Icons.edit, color: Colors.white, size: 18),
                                 ),
                               ],
                               child: Container(
@@ -950,18 +1175,32 @@ static const double heightsearch = 35;
           }),
           const SizedBox(height: 8),
         ],
-        // ── Récemment ajoutés ──
-        if (_alimentsFiltres.isNotEmpty) ...[
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
-            child: const Text(
-              'Récemment ajoutés :',
-              style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
-            ),
-          ),
-          ..._alimentsFiltres.map((a) => _buildAlimentCard(a, useRecentsQty: true)),
-        ],
+        // ── Comme hier ──
+        if (_alimentsHier.isNotEmpty) Builder(builder: (context) {
+          final nomsEnAttente = _alimentsEnAttente
+              .map((item) => (item['aliment'] as Aliment).nom)
+              .toSet();
+          final manquants = _alimentsHier
+              .where((ac) => !nomsEnAttente.contains(ac.aliment.nom))
+              .toList();
+          if (manquants.isEmpty) return const SizedBox.shrink();
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
+                child: const Text(
+                  'Comme hier :',
+                  style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+              ),
+              _buildCommeHierCard(manquants),
+            ],
+          );
+        }),
+        // ── Onglets bas : Récents / Mes recettes ──
+        _buildOngletsBas(),
       ],
     );
   }

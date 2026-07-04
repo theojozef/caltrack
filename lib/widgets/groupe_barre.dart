@@ -25,13 +25,14 @@ double _getValeurPosition(
     double compteurCalories,
     double valeurMin,
     double valeurMax,
-    double width,
-) {
+    double width, {
+    bool showMaxBorne = true,
+}) {
   if (compteurCalories < valeurMin) {
-    return width * (0.25 / 2) ;
-  } else if (compteurCalories > valeurMax) {
-    return width * ((1 + 0.75) / 2) ;
-  } else {    
+    return width * (0.25 / 2);
+  } else if (showMaxBorne && compteurCalories > valeurMax) {
+    return width * ((1 + 0.75) / 2);
+  } else {
     return width * 0.5;
   }
 }
@@ -47,6 +48,7 @@ class GroupeBarre extends StatefulWidget {
   final double compteurFontSize;
   final FontWeight compteurFontWeight;
   final double borneFontSize;
+  final bool showMaxBorne;
 
   const GroupeBarre({
     super.key,
@@ -56,9 +58,10 @@ class GroupeBarre extends StatefulWidget {
     required this.valeurMin,   // 👈 ajouté
     required this.valeurMax,   // 👈 ajouté
     required this.compteurCalories,
-    this.compteurFontSize = 10,
+    this.compteurFontSize = 14, //10
     this.compteurFontWeight = FontWeight.normal,
-    this.borneFontSize = 10,
+    this.borneFontSize = 12, //10
+    this.showMaxBorne = true,
   });
 
   @override
@@ -194,7 +197,11 @@ class _GroupeBarreState extends State<GroupeBarre> with SingleTickerProviderStat
           animation: _sliderAnimation,
           builder: (context, child) {
             //final animatedSliderValue = _sliderAnimation.value;
-            final color = getBarColor(_sliderAnimation.value, width);
+            final colorLimites = getColorLimites(width);
+            final effectiveSlider = widget.showMaxBorne
+              ? _sliderAnimation.value
+              : _sliderAnimation.value.clamp(0.0, colorLimites['rightSoft']!);
+            final color = getBarColor(effectiveSlider, width);
             //final sliderPosition = animatedSliderValue * (width - 30) + 15;
           return Stack(
             children: [
@@ -217,9 +224,9 @@ class _GroupeBarreState extends State<GroupeBarre> with SingleTickerProviderStat
 
 
               ),
-              
+
               ValeurCompteur(
-                position: _getValeurPosition(widget.compteurCalories, widget.valeurMin, widget.valeurMax, width), // width * 0.5,
+                position: _getValeurPosition(widget.compteurCalories, widget.valeurMin, widget.valeurMax, width, showMaxBorne: widget.showMaxBorne),
                 valeuraffichee: widget.compteurCalories.round().toDouble(),
                 barHeight: barHeight,
                 fontSize: widget.compteurFontSize,
@@ -251,7 +258,7 @@ class _GroupeBarreState extends State<GroupeBarre> with SingleTickerProviderStat
   Widget _buildBornes(double width, double barHeight, double borneHeight, double borneWidth) => Stack(
         children: [
           _borneAt(width * 0.25, barHeight, borneHeight, borneWidth),
-          _borneAt(width * 0.75, barHeight, borneHeight, borneWidth),
+          if (widget.showMaxBorne) _borneAt(width * 0.75, barHeight, borneHeight, borneWidth),
         ],
       );
   Widget _borneAt(double left, double barHeight, double borneHeight, double borneWidth) => Positioned(
@@ -272,7 +279,7 @@ class _GroupeBarreState extends State<GroupeBarre> with SingleTickerProviderStat
       children: [
       _borneTexte(width * 0.25, widget.valeurMin),
       _titreBarre(width),
-      _borneTexte(width * 0.75, widget.valeurMax),
+      if (widget.showMaxBorne) _borneTexte(width * 0.75, widget.valeurMax),
     ],
     );
 
@@ -302,7 +309,7 @@ class _GroupeBarreState extends State<GroupeBarre> with SingleTickerProviderStat
     widget.titre,
     style: const TextStyle(
       color: Colors.white,
-      fontSize: 11,
+      fontSize: 14, //11
       fontWeight: FontWeight.w500,
     ),
   ),

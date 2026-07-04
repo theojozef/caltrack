@@ -112,9 +112,9 @@ class CalculateurNutrition {
   }
   // ---------------------------
 
-  // ✅ Calcul des fibres (ANSES : 25 g/j min → 30 g/j pour 2 000 kcal = 12.5–15 g/1 000 kcal)
-  int fibresMin = (caloriesMin * 12.5 / 1000).round();
-  int fibresMax = (caloriesMax * 15 / 1000).round();
+  // ✅ Calcul des fibres (seuil min : 14 g/1 000 kcal ; max interne masqué : 30 g/1 000 kcal)
+  int fibresMin = (caloriesMin * 14 / 1000).round();
+  int fibresMax = (caloriesMax * 30 / 1000).round();
 
   // ---------------------------
 
@@ -181,8 +181,8 @@ class CalculateurNutrition {
   // Fibres calculées avant l'ajustement de caloriesMin : l'ajustement peut
   // pousser caloriesMin au-dessus de caloriesMax (calories réelles consommées),
   // ce qui inverserait min/max des fibres.
-  int fibresMin = (caloriesMin * 12.5 / 1000).round();
-  int fibresMax = (caloriesMax * 15 / 1000).round();
+  int fibresMin = (caloriesMin * 14 / 1000).round();
+  int fibresMax = (caloriesMax * 30 / 1000).round();
   if (fibresMin > fibresMax) fibresMin = fibresMax;
 
   if (caloriesMin < (4*protMin + 9*lipidesMin)) {

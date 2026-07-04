@@ -56,21 +56,23 @@ void initState() {
 }
 
 Future<void> _loadUserData() async {
-  final uid = FirebaseAuth.instance.currentUser?.uid;
-  if (uid == null) return;
+  final userId = await LocalStorageService.getCurrentUserId();
+  final firebaseUser = FirebaseAuth.instance.currentUser;
 
-  // Prénom : Auth en priorité (rapide), Firestore en fallback
-  final displayName = FirebaseAuth.instance.currentUser?.displayName ?? '';
-  if (displayName.isNotEmpty) {
-    setState(() => _prenom = displayName);
-  } else {
-    final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-    final prenom = doc.data()?['prenom'] as String? ?? '';
-    if (prenom.isNotEmpty && mounted) setState(() => _prenom = prenom);
+  // Prénom : Auth en priorité, Firestore en fallback (uniquement si connecté)
+  if (firebaseUser != null) {
+    final displayName = firebaseUser.displayName ?? '';
+    if (displayName.isNotEmpty) {
+      setState(() => _prenom = displayName);
+    } else {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(firebaseUser.uid).get();
+      final prenom = doc.data()?['prenom'] as String? ?? '';
+      if (prenom.isNotEmpty && mounted) setState(() => _prenom = prenom);
+    }
   }
 
   // 1. LocalStorageService (même source que tableaudebord)
-  final localUser = await LocalStorageService.loadUserData(uid);
+  final localUser = await LocalStorageService.loadUserData(userId);
   if (localUser != null) {
     setState(() {
       _poidsController.text = localUser.poids.toString();
@@ -87,14 +89,13 @@ Future<void> _loadUserData() async {
 
   // 2. Fallback : clés plates (ancienne version)
   final prefs = await SharedPreferences.getInstance();
-  // Essaie de charger les données localement d'abord
-  final poidsLocal = prefs.getDouble('${uid}_poids');
-  final tailleLocal = prefs.getDouble('${uid}_taille');
-  final ageLocal = prefs.getInt('${uid}_age');
-  final sexeLocal = prefs.getString('${uid}_sexe');
-  final niveauActiviteLocal = prefs.getString('${uid}_niveauActivite');
-  final sportLocal = prefs.getString('${uid}_sport');
-  final objectifLocal = prefs.getString('${uid}_objectif');
+  final poidsLocal = prefs.getDouble('${userId}_poids');
+  final tailleLocal = prefs.getDouble('${userId}_taille');
+  final ageLocal = prefs.getInt('${userId}_age');
+  final sexeLocal = prefs.getString('${userId}_sexe');
+  final niveauActiviteLocal = prefs.getString('${userId}_niveauActivite');
+  final sportLocal = prefs.getString('${userId}_sport');
+  final objectifLocal = prefs.getString('${userId}_objectif');
 
   if (poidsLocal != null &&
       tailleLocal != null &&
@@ -103,7 +104,6 @@ Future<void> _loadUserData() async {
       niveauActiviteLocal != null &&
       sportLocal != null &&
       objectifLocal != null) {
-    // Données locales présentes -> utiliser celles-ci
     setState(() {
       _poidsController.text = poidsLocal.toString();
       _tailleController.text = tailleLocal.toString();
@@ -114,30 +114,33 @@ Future<void> _loadUserData() async {
       _objectif = objectifLocal;
       _isLoading = false;
     });
-    return; // On s’arrête ici car on a les données locales
+    return;
   }
 
-  // 3. Sinon on charge depuis Firestore
-  final doc = await FirebaseFirestore.instance
-  .collection('users')
-  .doc(uid)
-  .get();
-  
-  if (doc.exists) {
-    final data = doc.data()!;
-    setState(() {
-      _poidsController.text = data['Poids'] != null ? data['Poids'].toString() : '';
-      _tailleController.text = data['Taille'] != null ? data['Taille'].toString() : '';
-      _ageController.text = data['Âge'] != null ? data['Âge'].toString() : '';
-      _sexe = data['Sexe']; // ?? 'homme';
-      _niveauActivite = data['Niveau d\'activité physique']; // ?? 'actif';
-      _sport = data['Type d\'activité physique']; // ?? 'force';
-      _objectif = data['Objectif']; // ?? 'maintien';
-      _isLoading = false;
-    });
-  } else {
-    setState(() => _isLoading = false);
+  // 3. Fallback Firebase (uniquement si connecté)
+  if (firebaseUser != null) {
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(firebaseUser.uid)
+        .get();
+
+    if (doc.exists) {
+      final data = doc.data()!;
+      setState(() {
+        _poidsController.text = data['Poids'] != null ? data['Poids'].toString() : '';
+        _tailleController.text = data['Taille'] != null ? data['Taille'].toString() : '';
+        _ageController.text = data['Âge'] != null ? data['Âge'].toString() : '';
+        _sexe = data['Sexe'];
+        _niveauActivite = data['Niveau d\'activité physique'];
+        _sport = data['Type d\'activité physique'];
+        _objectif = data['Objectif'];
+        _isLoading = false;
+      });
+      return;
+    }
   }
+
+  setState(() => _isLoading = false);
 }
 
 
@@ -166,10 +169,8 @@ Future<void> _loadUserData() async {
     if (confirm != true) return;
     await FirebaseAuth.instance.signOut();
     if (!mounted) return;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const ConnexionPage()),
-    );
+    setState(() => _prenom = '');
+    await _loadUserData();
   }
 
   @override
@@ -200,7 +201,7 @@ Future<void> _loadUserData() async {
   }
 
   Future<void> _saveUserData() async {
-    
+
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
@@ -209,11 +210,8 @@ Future<void> _loadUserData() async {
     });
 
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) {
-        setState(() => _errorMessage = "Utilisateur non connecté.");
-        return;
-      }
+      final userId = await LocalStorageService.getCurrentUserId();
+      final firebaseUid = FirebaseAuth.instance.currentUser?.uid;
 
       final utilisateur = _enregistrerDonnees();
       if (utilisateur == null) {
@@ -221,30 +219,33 @@ Future<void> _loadUserData() async {
         return;
       }
 
-      await FirebaseFirestore.instance.collection('users').doc(uid).update({
-        'Poids': utilisateur.poids,
-        'Taille': utilisateur.taille,
-        'Âge': utilisateur.age,
-        'Sexe': utilisateur.sexe,
-        'Niveau d\'activité physique': _niveauActivite,
-        'Type d\'activité physique' : _sport,
-        'Objectif' : _objectif,      
-      });
-
-      // Sauvegarde locale dans SharedPreferences
-      // Clés avec underscore + minuscule pour correspondre à _loadUserData()
+      // Sauvegarde locale en premier (toujours, guest ou connecté)
       final prefs = await SharedPreferences.getInstance();
-      //final uid = FirebaseAuth.instance.currentUser!.uid;
-      await prefs.setDouble('${uid}_poids', utilisateur.poids);
-      await prefs.setDouble('${uid}_taille', utilisateur.taille);
-      await prefs.setInt('${uid}_age', utilisateur.age);
-      await prefs.setString('${uid}_sexe', utilisateur.sexe);
-      await prefs.setString('${uid}_niveauActivite', _niveauActivite ?? '');
-      await prefs.setString('${uid}_sport', _sport ?? '');
-      await prefs.setString('${uid}_objectif', _objectif ?? '');
+      await prefs.setDouble('${userId}_poids', utilisateur.poids);
+      await prefs.setDouble('${userId}_taille', utilisateur.taille);
+      await prefs.setInt('${userId}_age', utilisateur.age);
+      await prefs.setString('${userId}_sexe', utilisateur.sexe);
+      await prefs.setString('${userId}_niveauActivite', _niveauActivite ?? '');
+      await prefs.setString('${userId}_sport', _sport ?? '');
+      await prefs.setString('${userId}_objectif', _objectif ?? '');
+      await LocalStorageService.saveUserData(userId, utilisateur);
 
-      // Mise à jour de userData_$userId pour rester synchronisé avec tableaudebord
-      await LocalStorageService.saveUserData(uid, utilisateur);
+      // Sync Firestore uniquement si connecté (erreur réseau silencieuse)
+      if (firebaseUid != null) {
+        try {
+          await FirebaseFirestore.instance.collection('users').doc(firebaseUid).update({
+            'Poids': utilisateur.poids,
+            'Taille': utilisateur.taille,
+            'Âge': utilisateur.age,
+            'Sexe': utilisateur.sexe,
+            'Niveau d\'activité physique': _niveauActivite,
+            'Type d\'activité physique' : _sport,
+            'Objectif' : _objectif,
+          });
+        } catch (_) {
+          // Ignoré : données sauvegardées localement, Firestore synchro au retour du réseau
+        }
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -371,14 +372,30 @@ child: PopScope(
                 children: [
                   const Icon(Icons.account_circle, color: Colors.white70, size: 32),
                   const SizedBox(width: 10),
-                  Text(
-                    _prenom,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                  if (FirebaseAuth.instance.currentUser != null)
+                    Text(
+                      _prenom,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    )
+                  else
+                    GestureDetector(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ConnexionPage()),
+                      ),
+                      child: const Text(
+                        'Se connecter',
+                        style: TextStyle(
+                          color: Color(0xFF357E50),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
-                  ),
                 ],
               ),
               const SizedBox(height: gap),
@@ -616,11 +633,14 @@ child: PopScope(
                     ),
                     ),
 
-                    IconButton(
-                      icon: const Icon(Icons.logout, color: Colors.red, size: 24),
-                      onPressed: _signOut,
-                      tooltip: 'Se déconnecter',
-                    ),
+                    if (FirebaseAuth.instance.currentUser != null)
+                      IconButton(
+                        icon: const Icon(Icons.logout, color: Colors.red, size: 24),
+                        onPressed: _signOut,
+                        tooltip: 'Se déconnecter',
+                      )
+                    else
+                      const SizedBox(width: 48),
 
                   ],
                   ),

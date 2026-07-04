@@ -1,9 +1,39 @@
 import 'dart:convert';
+import 'dart:math';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cal_track_v1/models/user_data.dart';
 import 'package:cal_track_v1/models/aliment.dart';
 
 class LocalStorageService {
+
+  // Retourne l'uid Firebase si connecté, sinon crée/récupère un UUID guest local
+  static Future<String> getCurrentUserId() async {
+    final firebaseUid = FirebaseAuth.instance.currentUser?.uid;
+    if (firebaseUid != null) return firebaseUid;
+
+    final prefs = await SharedPreferences.getInstance();
+    final existing = prefs.getString('guest_id');
+    if (existing != null) return existing;
+
+    final uuid = _generateUUID();
+    await prefs.setString('guest_id', uuid);
+    return uuid;
+  }
+
+  static String _generateUUID() {
+    final rng = Random.secure();
+    final bytes = List<int>.generate(16, (_) => rng.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    String h(int v) => v.toRadixString(16).padLeft(2, '0');
+    return '${h(bytes[0])}${h(bytes[1])}${h(bytes[2])}${h(bytes[3])}-'
+        '${h(bytes[4])}${h(bytes[5])}-'
+        '${h(bytes[6])}${h(bytes[7])}-'
+        '${h(bytes[8])}${h(bytes[9])}-'
+        '${h(bytes[10])}${h(bytes[11])}${h(bytes[12])}${h(bytes[13])}${h(bytes[14])}${h(bytes[15])}';
+  }
+
   static Future<void> saveUserData(String userId, UserModel user) async {
     final prefs = await SharedPreferences.getInstance();
     //final jsonString = json.encode(user.toJson());
@@ -75,6 +105,89 @@ class LocalStorageService {
     return dates;
   }
 
+
+  // ── Aliments épinglés (persistance quotidienne) ──────────────────────────
+
+  static Future<List<AlimentConsomme>> loadPinnedItems(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonString = prefs.getString('pins_$userId');
+    if (jsonString == null) return [];
+    final List<dynamic> decoded = jsonDecode(jsonString);
+    return decoded.map((item) => AlimentConsomme.fromJson(item as Map<String, dynamic>)).toList();
+  }
+
+  static Future<void> savePinnedItems(String userId, List<AlimentConsomme> items) async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonList = items.map((a) => a.toJson()).toList();
+    await prefs.setString('pins_$userId', jsonEncode(jsonList));
+  }
+
+  // Ajoute ou retire l'aliment du store de pins selon s'il est déjà présent.
+  static Future<void> togglePin(String userId, AlimentConsomme item) async {
+    final pins = await loadPinnedItems(userId);
+    final idx = pins.indexWhere(
+      (p) => p.aliment.nom == item.aliment.nom && p.repas == item.repas,
+    );
+    if (idx >= 0) {
+      pins.removeAt(idx);
+    } else {
+      pins.add(AlimentConsomme(item.aliment, item.quantite, repas: item.repas, estEpingle: true));
+    }
+    await savePinnedItems(userId, pins);
+  }
+
+  // Retire définitivement l'aliment du store de pins (utilisé lors d'une suppression définitive).
+  static Future<void> removePin(String userId, AlimentConsomme item) async {
+    final pins = await loadPinnedItems(userId);
+    pins.removeWhere((p) => p.aliment.nom == item.aliment.nom && p.repas == item.repas);
+    await savePinnedItems(userId, pins);
+  }
+
+  // Nettoie le pin sur toutes les dates depuis aujourd'hui, sauf [exclureDate]
+  // (le jour en cours d'édition, déjà géré par la vue).
+  // - Aujourd'hui : retire estEpingle sans supprimer l'item.
+  // - Jours futurs : supprime l'item entièrement.
+  static Future<void> nettoyerPinGlobal(String userId, AlimentConsomme item, String exclureDate) async {
+    final today = formatDate(DateTime.now());
+    final prefs = await SharedPreferences.getInstance();
+    final prefix = 'alimentsDuJour_${userId}_';
+    final dates = prefs
+        .getKeys()
+        .where((k) => k.startsWith(prefix))
+        .map((k) => k.replaceFirst(prefix, ''))
+        .where((d) => d.compareTo(today) >= 0 && d != exclureDate)
+        .toList();
+
+    for (final date in dates) {
+      final aliments = await loadAlimentsDuJour(userId, date);
+      bool modified = false;
+      if (date == today) {
+        for (final a in aliments) {
+          if (a.aliment.nom == item.aliment.nom && a.repas == item.repas && a.estEpingle) {
+            a.estEpingle = false;
+            modified = true;
+          }
+        }
+      } else {
+        final avant = aliments.length;
+        aliments.removeWhere((a) => a.aliment.nom == item.aliment.nom && a.repas == item.repas);
+        modified = aliments.length != avant;
+      }
+      if (modified) await saveAlimentsDuJour(userId, aliments, date);
+    }
+  }
+
+  // Met à jour la quantité d'un pin existant (propagée aux jours futurs).
+  static Future<void> updatePinQuantite(String userId, AlimentConsomme item) async {
+    final pins = await loadPinnedItems(userId);
+    final idx = pins.indexWhere(
+      (p) => p.aliment.nom == item.aliment.nom && p.repas == item.repas,
+    );
+    if (idx >= 0) {
+      pins[idx] = AlimentConsomme(item.aliment, item.quantite, repas: item.repas, estEpingle: true);
+      await savePinnedItems(userId, pins);
+    }
+  }
 
   static Future<void> saveRecents(String userId, List<Aliment> recents) async {
     final prefs = await SharedPreferences.getInstance();

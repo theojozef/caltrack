@@ -155,13 +155,15 @@ class AlimentConsomme {
   final Aliment aliment;
   double quantite;
   Repas? repas; // nullable pour compatibilité avec données existantes
+  bool estEpingle;
 
-  AlimentConsomme(this.aliment, this.quantite, {this.repas});
+  AlimentConsomme(this.aliment, this.quantite, {this.repas, this.estEpingle = false});
 
   Map<String, dynamic> toJson() => {
     'aliment': aliment.toJson(),
     'quantite': quantite,
     if (repas != null) 'repas': repas!.name,
+    if (estEpingle) 'estEpingle': true,
   };
 
   factory AlimentConsomme.fromJson(Map<String, dynamic> json) {
@@ -178,6 +180,7 @@ class AlimentConsomme {
       Aliment.fromJson(json['aliment']),
       (json['quantite'] as num).toDouble(),
       repas: repas,
+      estEpingle: json['estEpingle'] as bool? ?? false,
     );
   }
 }
